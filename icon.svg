@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?><svg width="800" height="200" xmlns="http://www.w3.org/2000/svg">
+    <style>        .letter {
+            font-family: Arial, sans-serif;            font-size: 72px;
+            fill: none;            stroke: #fff;
+            stroke-width: 2;        }
+        .letter path {            stroke-dasharray: 500;
+            stroke-dashoffset: 500;
+            animation: draw 2s forwards;            animation-delay: var(--delay);
+        }        @keyframes draw {
+            to {                stroke-dashoffset: 0;            }
+        }    </style>
+        <text class="letter" x="50%" y="50%" text-anchor="middle" dominant-baseline="middle">
+        <tspan style="--delay: 0s">x</tspan>        <tspan style="--delay: 0.2s">i</tspan>
+        <tspan style="--delay: 0.4s">n</tspan>        <tspan style="--delay: 0.6s">g</tspan>
+        <tspan style="--delay: 0.8s">x</tspan>        <tspan style="--delay: 1.0s">e</tspan>
+        <tspan style="--delay: 1.2s">r</tspan>        <tspan style="--delay: 1.4s">x</tspan>
+    </text>
+</svg>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

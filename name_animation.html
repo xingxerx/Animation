@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xingxerx Animation</title>
+    <style>
+        body {
+            background-color: #121212;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .name {
+            font-family: 'Arial', sans-serif;
+            font-size: 5rem;
+            display: flex;
+        }
+        .letter {
+            color: #fff;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: transform 0.5s, opacity 0.5s, color 0.3s;
+        }
+        .letter:hover {
+            color: #ff00ff;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="name" id="name-container"></div>
+
+    <script>
+        const name = "xingxerx";
+        const container = document.getElementById('name-container');
+        
+        // Create letter elements
+        name.split('').forEach((letter, index) => {
+            const span = document.createElement('span');
+            span.className = 'letter';
+            span.textContent = letter;
+            span.style.animationDelay = `${index * 0.1}s`;
+            container.appendChild(span);
+        });
+        
+        // Animate letters
+        const letters = document.querySelectorAll('.letter');
+        setTimeout(() => {
+            letters.forEach((letter, index) => {
+                setTimeout(() => {
+                    letter.style.transform = 'translateY(0)';
+                    letter.style.opacity = '1';
+                }, index * 150);
+            });
+        }, 500);
+    </script>
+</body>
+</html>
