@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Dream Begins</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+        }
+        #scene-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        .narrative {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            opacity: 0;
+            transition: opacity 2s;
+            font-size: 1.5rem;
+            max-width: 80%;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        .book {
+            position: absolute;
+            width: 300px;
+            height: 400px;
+            background-color: #421010;
+            border-radius: 5px;
+            transform-style: preserve-3d;
+            display: none;
+        }
+        .rose {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff0066;
+            font-size: 5rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="scene-container"></div>
+    <div id="narrative" class="narrative"></div>
+    <div id="book" class="book">
+        <div class="rose">🌹</div>
+    </div>
+
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('scene-container').appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        scene.add(directionalLight);
+        
+        // Camera position
+        camera.position.z = 5;
+        
+        // Narrative text
+        const narrativeElement = document.getElementById('narrative');
+        const bookElement = document.getElementById('book');
+        
+        // Story sequences
+        const sequences = [
+            { text: "What is a story?", duration: 3000 },
+            { text: "A story is where boredom births imagination—a dream given voice.", duration: 5000 },
+            { text: "A space where worlds bloom from whispers, and reality flickers like candlelight.", duration: 5000 },
+            { text: "But sometimes, the dream doesn't stay in the dream.", duration: 4000 },
+            { text: "It follows you, becomes a thought, then a memory.", duration: 4000 },
+            { text: "A promise.", duration: 2000 },
+            { text: "A danger.", duration: 2000 },
+            { text: "A love letter waiting to be opened.", duration: 4000 },
+            // Scene transitions and more sequences can be added
+        ];
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        
+        // Start animation
+        animate();
+        
+        // Play through sequences
+        let currentSequence = 0;
+        
+        function playNextSequence() {
+            if (currentSequence >= sequences.length) {
+                // Start Scene 2 - Awakening of Xing
+                startScene2();
+                return;
+            }
+            
+            const sequence = sequences[currentSequence];
+            narrativeElement.textContent = sequence.text;
+            narrativeElement.style.opacity = 1;
+            
+            setTimeout(() => {
+                narrativeElement.style.opacity = 0;
+                setTimeout(() => {
+                    currentSequence++;
+                    playNextSequence();
+                }, 1000);
+            }, sequence.duration);
+        }
+        
+        // Start Scene 2
+        function startScene2() {
+            // Transition to darkness then light
+            scene.background = new THREE.Color(0x000000);
+            setTimeout(() => {
+                scene.background = new THREE.Color(0xffffff);
+                setTimeout(() => {
+                    narrativeElement.textContent = "Where... am I?";
+                    narrativeElement.style.opacity = 1;
+                    // Continue with more scene transitions
+                }, 1000);
+            }, 2000);
+        }
+        
+        // Start the sequence after a short delay
+        setTimeout(playNextSequence, 1000);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
