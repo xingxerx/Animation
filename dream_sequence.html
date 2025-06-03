@@ -38,6 +38,7 @@
             border-radius: 5px;
             transform-style: preserve-3d;
             display: none;
+            box-shadow: 0 0 20px rgba(255, 0, 102, 0.5);
         }
         .rose {
             position: absolute;
@@ -47,6 +48,42 @@
             color: #ff0066;
             font-size: 5rem;
         }
+        .heart {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff;
+            font-size: 3rem;
+            display: none;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); color: #ffffff; }
+            50% { transform: translate(-50%, -50%) scale(1.2); color: #ff0066; }
+            100% { transform: translate(-50%, -50%) scale(1); color: #ffffff; }
+        }
+        .petal {
+            position: absolute;
+            color: #ff0066;
+            font-size: 1.5rem;
+            animation: fall 10s linear forwards;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(400px) rotate(720deg); opacity: 0; }
+        }
+        .glitch {
+            animation: glitch 0.5s infinite;
+        }
+        @keyframes glitch {
+            0% { opacity: 1; transform: translate(0); }
+            20% { opacity: 0.8; transform: translate(-5px, 5px); }
+            40% { opacity: 0.9; transform: translate(5px, -5px); }
+            60% { opacity: 0.6; transform: translate(-5px, -5px); }
+            80% { opacity: 0.9; transform: translate(5px, 5px); }
+            100% { opacity: 1; transform: translate(0); }
+        }
     </style>
 </head>
 <body>
@@ -55,6 +92,7 @@
     <div id="book" class="book">
         <div class="rose">🌹</div>
     </div>
+    <div id="heart" class="heart">❤️</div>
 
     <script>
         // Scene setup
@@ -76,6 +114,56 @@
         // Narrative text
         const narrativeElement = document.getElementById('narrative');
         const bookElement = document.getElementById('book');
+        const heartElement = document.getElementById('heart');
+        
+        // Create particles
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1000;
+        const posArray = new Float32Array(particlesCount * 3);
+        
+        for(let i = 0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 10;
+        }
+        
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+        
+        // Create book geometry
+        const bookGeometry = new THREE.BoxGeometry(1, 1.4, 0.2);
+        const bookMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x421010,
+            roughness: 0.5,
+            metalness: 0.2
+        });
+        const bookMesh = new THREE.Mesh(bookGeometry, bookMaterial);
+        bookMesh.position.set(0, 0, -10); // Start off-screen
+        scene.add(bookMesh);
+        
+        // Create heart geometry
+        const heartShape = new THREE.Shape();
+        heartShape.moveTo(0, 0);
+        heartShape.bezierCurveTo(0, 0.5, 0.5, 1, 1, 1);
+        heartShape.bezierCurveTo(1.5, 1, 2, 0.5, 2, 0);
+        heartShape.bezierCurveTo(2, -0.5, 1.5, -1, 1, -1.5);
+        heartShape.bezierCurveTo(0.5, -1, 0, -0.5, 0, 0);
+        
+        const heartGeometry = new THREE.ShapeGeometry(heartShape);
+        const heartMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff0066,
+            side: THREE.DoubleSide
+        });
+        const heartMesh = new THREE.Mesh(heartGeometry, heartMaterial);
+        heartMesh.scale.set(0.3, 0.3, 0.3);
+        heartMesh.position.set(0, 0, -10); // Start off-screen
+        scene.add(heartMesh);
         
         // Story sequences
         const sequences = [
@@ -87,12 +175,28 @@
             { text: "A promise.", duration: 2000 },
             { text: "A danger.", duration: 2000 },
             { text: "A love letter waiting to be opened.", duration: 4000 },
-            // Scene transitions and more sequences can be added
         ];
         
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Rotate particles
+            particlesMesh.rotation.x += 0.0005;
+            particlesMesh.rotation.y += 0.0005;
+            
+            // Animate book if visible
+            if (bookMesh.position.z > -5) {
+                bookMesh.rotation.y += 0.01;
+            }
+            
+            // Animate heart if visible
+            if (heartMesh.position.z > -5) {
+                heartMesh.rotation.z += 0.01;
+                heartMesh.scale.x = 0.3 + Math.sin(Date.now() * 0.003) * 0.05;
+                heartMesh.scale.y = 0.3 + Math.sin(Date.now() * 0.003) * 0.05;
+            }
+            
             renderer.render(scene, camera);
         }
         
@@ -113,6 +217,20 @@
             narrativeElement.textContent = sequence.text;
             narrativeElement.style.opacity = 1;
             
+            // Special effects for certain sequences
+            if (currentSequence === 2) {
+                // Make particles more visible during "worlds bloom" text
+                particlesMaterial.size = 0.05;
+                particlesMaterial.color.set(0xffaaff);
+            }
+            
+            if (currentSequence === 7) {
+                // Show the book during "love letter" text
+                bookMesh.position.z = 0;
+                // Add falling petal
+                addFallingPetal();
+            }
+            
             setTimeout(() => {
                 narrativeElement.style.opacity = 0;
                 setTimeout(() => {
@@ -122,16 +240,74 @@
             }, sequence.duration);
         }
         
+        function addFallingPetal() {
+            const petal = document.createElement('div');
+            petal.className = 'petal';
+            petal.textContent = '🌸';
+            petal.style.left = '50%';
+            petal.style.top = '30%';
+            document.body.appendChild(petal);
+        }
+        
         // Start Scene 2
         function startScene2() {
             // Transition to darkness then light
             scene.background = new THREE.Color(0x000000);
+            
+            // Hide book, show heart
+            bookMesh.position.z = -10;
+            
             setTimeout(() => {
                 scene.background = new THREE.Color(0xffffff);
+                particlesMaterial.color.set(0x000000);
+                heartMesh.position.z = 0;
+                
                 setTimeout(() => {
                     narrativeElement.textContent = "Where... am I?";
                     narrativeElement.style.opacity = 1;
-                    // Continue with more scene transitions
+                    
+                    // Show fragments drifting into mind
+                    setTimeout(() => {
+                        narrativeElement.style.opacity = 0;
+                        setTimeout(() => {
+                            narrativeElement.textContent = "A brother.";
+                            narrativeElement.style.opacity = 1;
+                            
+                            setTimeout(() => {
+                                narrativeElement.style.opacity = 0;
+                                setTimeout(() => {
+                                    narrativeElement.textContent = "A name: Xerx.";
+                                    narrativeElement.style.opacity = 1;
+                                    
+                                    setTimeout(() => {
+                                        narrativeElement.style.opacity = 0;
+                                        setTimeout(() => {
+                                            narrativeElement.textContent = "A book with a rose-shaped cover, a petal forever falling.";
+                                            narrativeElement.style.opacity = 1;
+                                            bookMesh.position.z = 0;
+                                            addFallingPetal();
+                                            
+                                            setTimeout(() => {
+                                                narrativeElement.style.opacity = 0;
+                                                setTimeout(() => {
+                                                    narrativeElement.textContent = "The word \"Author\"... but was he the writer, or just a written thought?";
+                                                    narrativeElement.style.opacity = 1;
+                                                    narrativeElement.classList.add('glitch');
+                                                    
+                                                    // Continue to Scene 3 or end
+                                                    setTimeout(() => {
+                                                        narrativeElement.style.opacity = 0;
+                                                        narrativeElement.classList.remove('glitch');
+                                                        // Could continue to Scene 3 here
+                                                    }, 5000);
+                                                }, 1000);
+                                            }, 5000);
+                                        }, 1000);
+                                    }, 3000);
+                                }, 1000);
+                            }, 3000);
+                        }, 1000);
+                    }, 4000);
                 }, 1000);
             }, 2000);
         }
@@ -145,6 +321,18 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+        
+        // Add color-changing heart functionality
+        function changeHeartColor(color) {
+            heartMesh.material.color.set(color);
+        }
+        
+        // Simulate heart color changes based on mood
+        setInterval(() => {
+            const colors = [0xffffff, 0xff0066, 0x000000, 0x9900ff];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            changeHeartColor(randomColor);
+        }, 8000);
     </script>
 </body>
 </html>
