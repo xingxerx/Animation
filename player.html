@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Avatar Viewer</title>
+    <!-- Import the <model-viewer> component -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+        model-viewer {
+            width: 80vw; /* Adjust size as needed */
+            height: 80vh; /* Adjust size as needed */
+            max-width: 600px;
+            max-height: 600px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="instructions">
+        Replace "your-avatar.glb" with the path to your 3D model file.
+    </div>
+
+    <model-viewer
+        id="avatarViewer"
+        src="your-avatar.glb" <!-- REPLACE THIS with your model file -->
+        alt="A 3D model of an avatar"
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        camera-controls
+        environment-image="neutral"
+        auto-rotate
+        shadow-intensity="1">
+        <div class="progress-bar hide" slot="progress-bar">
+            <div class="update-bar"></div>
+        </div>
+    </model-viewer>
+
+    <script>
+        // Optional: You can add JavaScript here to interact with the model-viewer component
+        // For example, to load different models, play animations, etc.
+        // const modelViewer = document.getElementById('avatarViewer');
+        // modelViewer.addEventListener('load', () => {
+        //     console.log('Avatar loaded!');
+        // });
+    </script>
+
+</body>
+</html>
