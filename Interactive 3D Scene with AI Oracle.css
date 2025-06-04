@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js AI Oracle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            pointer-events: none; /* Allows clicks to pass through to the canvas */
+            z-index: 10;
+        }
+        #chat-container, #settings-container {
+            position: fixed; /* Use fixed for taskbar */
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            max-height: 40vh; /* Max height for taskbar */
+            background: rgba(40, 44, 52, 0.9);
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            padding: 15px 20px; /* Adjusted padding for taskbar */
+            box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Smaller gap for taskbar */
+            z-index: 100;
+            transition: transform 0.3s ease-in-out;
+            transform: translateY(100%); /* Start hidden at the bottom */
+            border-top: 1px solid rgba(60, 65, 75, 0.5);
+            box-sizing: border-box; /* Include padding in width/height */
+        }
+        #chat-container.visible, #settings-container.visible {
+            transform: translateY(0); /* Slide up to visible position */
+        }
+        #chat-output {
+            background: rgba(60, 65, 75, 0.7);
+            border-radius: 8px;
+            padding: 10px; /* Smaller padding */
+            min-height: 80px; /* Adjusted min-height */
+            max-height: 150px; /* Adjusted max-height */
+            overflow-y: auto;
+            color: #e0e0e0;
+            font-size: 14px; /* Smaller font size */
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            scrollbar-width: thin;
+            scrollbar-color: #888 #555;
+            flex-grow: 1; /* Allow output to grow */
+        }
+        #chat-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-output::-webkit-scrollbar-track {
+            background: #555;
+            border-radius: 10px;
+        }
+        #chat-output::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        #chat-input, .keybind-input {
+            width: 100%;
+            padding: 10px 12px; /* Smaller padding */
+            border: 1px solid #4a4a4a;
+            border-radius: 8px;
+            background: #3a3a3a;
+            color: #e0e0e0;
+            font-size: 15px; /* Smaller font size */
+            outline: none;
+            box-sizing: border-box;
+        }
+        #chat-input:focus, .keybind-input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.3);
+        }
+        #loading-indicator {
+            color: #e0e0e0;
+            font-size: 13px; /* Smaller font size */
+            text-align: center;
+            display: none;
+        }
+        .glowing-sphere {
+            animation: pulse 2s infinite alternate;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 5px #007bff, 0 0 10px #007bff; }
+            100% { box-shadow: 0 0 15px #007bff, 0 0 25px #007bff; }
+        }
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px;
+            height: 6px;
+            background-color: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 99;
+            box-shadow: 0 0 3px rgba(0,0,0,0.8);
+        }
+        .keybind-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0; /* Smaller padding */
+            border-bottom: 1px solid rgba(60, 65, 75, 0.5);
+        }
+        .keybind-item:last-child {
+            border-bottom: none;
+        }
+        .keybind-item label {
+            color: #e0e0e0;
+            font-size: 15px; /* Smaller font size */
+            flex-grow: 1;
+        }
+        .keybind-item input {
+            width: 100px; /* Smaller width */
+            text-align: center;
+            cursor: pointer;
+        }
+        .settings-title {
+            color: #e0e0e0;
+            font-size: 18px; /* Smaller font size */
+            font-weight: bold;
+            margin-bottom: 10px; /* Smaller margin */
+            text-align: center;
+        }
+        #compass {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            pointer-events: none; /* Allows clicks to pass through */
+            position: relative; /* Needed for absolute positioning of children */
+        }
+        #compass-indicator {
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 20px solid #ff0000; /* Red triangle pointing North */
+            position: absolute;
+            top: 10px;
+            transform-origin: 50% 100%; /* Rotate around its base */
+        }
+        #compass-center {
+            width: 10px;
+            height: 10px;
+            background-color: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .compass-direction {
+            position: absolute;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 3px black;
+        }
+        #compass-n { top: 5px; left: 50%; transform: translateX(-50%); }
+        #compass-s { bottom: 5px; left: 50%; transform: translateX(-50%); }
+        #compass-e { right: 5px; top: 50%; transform: translateY(-50%); }
+        #compass-w { left: 5px; top: 50%; transform: translateY(-50%); }
+
+        /* New styles for intercardinal directions */
+        #compass-ne { top: 15px; right: 15px; transform: translate(50%, -50%) rotate(45deg); }
+        #compass-se { bottom: 15px; right: 15px; transform: translate(50%, 50%) rotate(135deg); }
+        #compass-sw { bottom: 15px; left: 15px; transform: translate(-50%, 50%) rotate(-135deg); }
+        #compass-nw { top: 15px; left: 15px; transform: translate(-50%, -50%) rotate(-45deg); }
+
+        /* Styles for compass studs */
+        .compass-stud-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .compass-stud {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            transform-origin: 50% 40px; /* Center of the compass */
+        }
+
+        /* Health Bar Styles */
+        #health-bar-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 25px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        #health-bar-fill {
+            height: 100%;
+            width: 100%; /* Initial width */
+            background-color: #00ff00; /* Green */
+            transition: width 0.2s ease-out, background-color 0.2s ease-out;
+            border-radius: 10px; /* Slightly smaller to fit inside container */
+        }
+        #health-text {
+            position: absolute;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 5px black;
+        }
+    </style>
+</head>
+<body class="bg-gray-900">
+    <div id="info">
+        Click on the 3D scene to enable first-person controls. Use W, A, S, D or arrow keys to move. Hold Shift to Sprint. Press Space to Jump. Press 'C' to Crouch. Press 'M' or click the glowing sphere to open/close the chat **taskbar**. Press '/' to start typing. Type your question or request into the chat and press Enter to send it to the Oracle. Press 'K' to toggle camera lock. Press Esc to close chat/release mouse. Press 'P' to open Keybind Settings **taskbar**. The Oracle grows as you explore the world! Use the **scroll wheel** to zoom the camera in and out.
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="compass">
+        <div id="compass-indicator"></div>
+        <div id="compass-center"></div>
+        <span id="compass-n" class="compass-direction">N</span>
+        <span id="compass-e" class="compass-direction">E</span>
+        <span id="compass-s" class="compass-direction">S</span>
+        <span id="compass-w" class="compass-direction">W</span>
+        <span id="compass-ne" class="compass-direction">NE</span>
+        <span id="compass-se" class="compass-direction">SE</span>
+        <span id="compass-sw" class="compass-direction">SW</span>
+        <span id="compass-nw" class="compass-direction">NW</span>
+        <div class="compass-stud-container" id="compass-studs"></div>
+    </div>
+
+    <div id="health-bar-container">
+        <div id="health-bar-fill"></div>
+        <span id="health-text">100%</span>
+    </div>
+
+    <div id="chat-container" class="rounded-xl">
+        <textarea id="chat-output" class="rounded-lg" readonly></textarea>
+        <input type="text" id="chat-input" placeholder="Ask a question, enter a keyword, or paste text..." class="rounded-lg"/>
+        <div id="loading-indicator">Thinking...</div>
+    </div>
+
+    <div id="settings-container" class="rounded-xl">
+        <div class="settings-title">Keybind Settings</div>
+        <div class="keybind-list">
+            <div class="keybind-item">
+                <label for="keybind-forward">Move Forward</label>
+                <input type="text" id="keybind-forward" class="keybind-input" data-action="forward" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-backward">Move Backward</label>
+                <input type="text" id="keybind-backward" class="keybind-input" data-action="backward" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-left">Move Left</label>
+                <input type="text" id="keybind-left" class="keybind-input" data-action="left" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-right">Move Right</label>
+                <input type="text" id="keybind-right" class="keybind-input" data-action="right" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-jump">Jump</label>
+                <input type="text" id="keybind-jump" class="keybind-input" data-action="jump" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-crouch">Crouch</label>
+                <input type="text" id="keybind-crouch" class="keybind-input" data-action="crouch" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-sprint">Sprint</label>
+                <input type="text" id="keybind-sprint" class="keybind-input" data-action="sprint" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-toggleChat">Toggle Chat</label>
+                <input type="text" id="keybind-toggleChat" class="keybind-input" data-action="toggleChat" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-toggleLock">Toggle Camera Lock</label>
+                <input type="text" id="keybind-toggleLock" class="keybind-input" data-action="toggleLock" readonly>
+            </div>
+            <div class="keybind-item">
+                <label for="keybind-startTyping">Start Typing (Chat)</label>
+                <input type="text" id="keybind-startTyping" class="keybind-input" data-action="startTyping" readonly>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- PointerLockControls for first-person camera interaction -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <!-- Post-processing effects for Depth of Field and Bloom -->
+    <!-- Dependencies for EffectComposer, RenderPass, ShaderPass, CopyShader -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <!-- BokehPass for Depth of Field -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/BokehShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/BokehPass.js"></script>
+
+    <!-- UnrealBloomPass for Bloom/Glare effect -->
+    <!-- Load required shaders from CDN before UnrealBloomPass -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/ToneMapShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/LuminosityHighPassShader.js"></script>
+    <script>
+        // Ensure all necessary shaders are attached to THREE before UnrealBloomPass is loaded.
+        // The CDN scripts for r128 are designed to attach themselves to THREE.
+        // These checks are a fallback in case the CDN scripts fail to do so for some reason,
+        // or if their execution order is not guaranteed.
+        if (typeof THREE.LuminosityShader === 'undefined') {
+            console.warn("THREE.LuminosityShader not found, defining a placeholder.");
+            THREE.LuminosityShader = {
+                shaderID: 'luminosity',
+                uniforms: {
+                    'tDiffuse': { value: null },
+                    'luminosityThreshold': { value: 1.0 },
+                    'smoothWidth': { value: 1.0 },
+                    'defaultColor': { value: new THREE.Color(0x000000) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform float luminosityThreshold;
+                    uniform float smoothWidth;
+                    uniform vec3 defaultColor;
+                    varying vec2 vUv;
+                    void main() {
+                        vec4 texel = texture2D( tDiffuse, vUv );
+                        vec3 luma = vec3( 0.299, 0.587, 0.114 );
+                        float v = dot( texel.xyz, luma );
+                        vec3 color = v < luminosityThreshold ? defaultColor : texel.xyz;
+                        float alpha = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );
+                        gl_FragColor = vec4( color, alpha );
+                    }
+                `
+            };
+        }
+
+        if (typeof THREE.ToneMapShader === 'undefined') {
+            console.warn("THREE.ToneMapShader not found, defining a placeholder.");
+            THREE.ToneMapShader = {
+                shaderID: 'toneMap',
+                uniforms: {
+                    'tDiffuse': { value: null },
+                    'exposure': { value: 1.0 },
+                    'gamma': { value: 2.2 }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform float exposure;
+                    uniform float gamma;
+                    varying vec2 vUv;
+                    void main() {
+                        vec4 texel = texture2D( tDiffuse, vUv );
+                        vec3 color = texel.rgb;
+                        color = pow( color, vec3( 1.0 / gamma ) );
+                        color = color * exposure;
+                        gl_FragColor = vec4( color, texel.a );
+                    }
+                `
+            };
+        }
+
+        if (typeof THREE.LuminosityHighPassShader === 'undefined') {
+            console.warn("THREE.LuminosityHighPassShader not found, defining a placeholder.");
+            THREE.LuminosityHighPassShader = {
+                shaderID: 'luminosityHighPass',
+                uniforms: {
+                    'tDiffuse': { value: null },
+                    'luminosityThreshold': { value: 1.0 },
+                    'smoothWidth': { value: 1.0 },
+                    'defaultColor': { value: new THREE.Color(0x000000) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform float luminosityThreshold;
+                    uniform float smoothWidth;
+                    uniform vec3 defaultColor;
+                    varying vec2 vUv;
+                    void main() {
+                        vec4 texel = texture2D( tDiffuse, vUv );
+                        vec3 luma = vec3( 0.299, 0.587, 0.114 );
+                        float v = dot( texel.xyz, luma );
+                        vec4 color = v < luminosityThreshold ? vec4( defaultColor, 1.0 ) : texel;
+                        float alpha = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );
+                        gl_FragColor = vec4( color.rgb, alpha );
+                    }
+                `
+            };
+        }
+    </script>
+    <!-- Finally, load UnrealBloomPass -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <!-- Cannon.js library for physics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <!-- GLTFLoader for loading 3D models -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+
+    <script>
+        // Global variables for the Three.js scene
+        let scene, camera, renderer, controls, sphere, character, earth, playerContainer;
+        let raycaster, mouse;
+        let sunMesh, moonMesh; // Visual meshes for sun and moon
+        let stars; // Particle system for stars
+
+        let compassIndicator; // Reference to the compass indicator element
+        let compassElement; // Reference to the main compass element
+        let compassStudsContainer; // Reference to the container for studs
+
+        // Health bar variables
+        let playerHealth = 100;
+        let healthBarFill;
+        let healthText;
+
+        // Post-processing variables
+        let composer, renderPass, bokehPass, bloomPass;
+
+        // Cannon.js variables
+        let world;
+        let earthBody, playerBody, sphereBody;
+        const timeStep = 1 / 60; // Physics simulation step
+
+        const walkSpeed = 0.03; // Base walking speed (reduced)
+        const sprintSpeed = 0.1; // Sprinting speed
+        let currentMoveSpeed = walkSpeed; // Dynamic speed based on sprint key
+        const jumpForce = 0.15; // Initial upward velocity for jump
+        const gravityStrength = 0.005; // Gravity strength (positive for force calculation)
+        let isGrounded = true;
+        let isJumping = false; // Flag to track if character is currently jumping
+
+        let isCrouching = false;
+        // Increased camera height offset to make the player taller and prevent phasing
+        const normalCameraHeightOffset = 1.0; // Camera Y offset from character's base when standing (increased from 0.5)
+        const crouchCameraHeightOffset = 0.5; // Camera Y offset when crouching (increased from 0.2)
+        let currentCameraHeightOffset = normalCameraHeightOffset;
+        const crouchTransitionSpeed = 0.05; // Speed at which camera height changes during crouch/stand transition
+
+        let isTyping = false; // State to track if chat input is active
+        let isSettingsOpen = false; // State to track if settings menu is open
+        let isRemappingKey = false; // State to track if a key is currently being remapped
+        let currentRemapAction = null; // Stores the action being remapped
+
+        // Player experience/growth variables
+        let playerExperience = 0;
+        const experiencePerMove = 0.001; // How much experience gained per movement step
+        const oracleScaleFactor = 0.01; // How much the Oracle scales per experience point
+
+        // Character animation variables
+        let mixer; // THREE.AnimationMixer for GLB animations
+        let animations = {}; // Stores animation actions by name
+        let currentAnimation = 'Idle'; // Tracks the currently playing animation
+        const animationFadeDuration = 0.2; // Duration for animation cross-fading
+
+        // Removed: bodyMesh, headMesh, leftArmMesh, rightArmMesh, leftLegMesh, rightLegMesh;
+        // Removed: walkCycleTime, walkAnimationSpeed, walkBobAmplitude, walkBobFrequency;
+
+        // Camera zoom distance relative to player
+        let cameraZoomDistance = -2; // Initial camera Z position relative to controls object
+        const minCameraZoom = -10; // Furthest zoom out
+        const maxCameraZoom = -0.5; // Closest zoom in
+
+        const keys = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            jump: false,
+            crouch: false,
+            sprint: false
+        };
+
+        let keyMap = {
+            'forward': 'KeyW',
+            'backward': 'KeyS',
+            'left': 'KeyA',
+            'right': 'KeyD',
+            'jump': 'Space',
+            'crouch': 'KeyC',
+            'sprint': 'ShiftLeft',
+            'toggleChat': 'KeyM',
+            'toggleLock': 'KeyK',
+            'startTyping': 'Slash',
+            'toggleSettings': 'KeyP'
+        };
+
+        // Day/Night Cycle variables
+        let sunLight, moonLight, ambientLight;
+        let timeOfDay = 0;
+        const dayCycleDurationSeconds = 300; // Duration of a full day/night cycle in seconds (5 minutes)
+
+        // UI Elements
+        const chatContainer = document.getElementById('chat-container');
+        const chatOutput = document.getElementById('chat-output');
+        const chatInput = document.getElementById('chat-input');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const settingsContainer = document.getElementById('settings-container');
+        const keybindInputs = document.querySelectorAll('.keybind-input');
+
+        // Clock for animation mixer
+        const clock = new THREE.Clock();
+
+
+        /**
+         * Converts event.code to a more readable string for display in UI.
+         * @param {string} code - The KeyboardEvent.code value.
+         * @returns {string} A user-friendly string for the key.
+         */
+        function getReadableKey(code) {
+            if (code.startsWith('Key')) return code.substring(3);
+            if (code.startsWith('Digit')) return code.substring(5);
+            if (code.startsWith('Arrow')) return code.substring(5);
+            if (code === 'Space') return 'Spacebar';
+            if (code === 'ShiftLeft') return 'Left Shift';
+            if (code === 'ShiftRight') return 'Right Shift';
+            if (code === 'ControlLeft') return 'Left Ctrl';
+            if (code === 'ControlRight') return 'Right Ctrl';
+            if (code === 'AltLeft') return 'Left Alt';
+            if (code === 'AltRight') return 'Right Alt';
+            if (code === 'Slash') return '/';
+            if (code === 'Escape') return 'Esc';
+            return code; // Fallback for other keys
+        }
+
+        /**
+         * Populates the keybind settings UI with current keyMap values.
+         */
+        function populateKeybindSettings() {
+            keybindInputs.forEach(input => {
+                const action = input.dataset.action;
+                input.value = getReadableKey(keyMap[action]);
+            });
+        }
+
+        /**
+         * Opens the chat menu, focuses the input, and unlocks the pointer.
+         */
+        function openChatMenu() {
+            if (isSettingsOpen) closeSettingsMenu(); // Close settings if open
+            chatContainer.classList.add('visible');
+            controls.unlock();
+            chatInput.focus();
+            isTyping = true;
+        }
+
+        /**
+         * Closes the chat menu, blurs the input, and locks the pointer.
+         */
+        function closeChatMenu() {
+            chatContainer.classList.remove('visible');
+            // Only attempt to lock if the chat is not visible, to avoid immediate re-unlock
+            // and if the pointer is not already locked.
+            if (!chatContainer.classList.contains('visible') && !controls.isLocked && !isSettingsOpen) {
+                controls.lock();
+            }
+            chatInput.blur();
+            isTyping = false;
+        }
+
+        /**
+         * Toggles the visibility of the chat container and manages pointer lock.
+         */
+        function toggleChatVisibility() {
+            if (chatContainer.classList.contains('visible')) {
+                closeChatMenu();
+            } else {
+                openChatMenu();
+            }
+        }
+
+        /**
+         * Opens the settings menu and unlocks the pointer.
+         */
+        function openSettingsMenu() {
+            if (isTyping) closeChatMenu(); // Close chat if open
+            settingsContainer.classList.add('visible');
+            controls.unlock();
+            isSettingsOpen = true;
+            populateKeybindSettings(); // Refresh keybinds on open
+        }
+
+        /**
+         * Closes the settings menu and attempts to lock the pointer.
+         */
+        function closeSettingsMenu() {
+            settingsContainer.classList.remove('visible');
+            isSettingsOpen = false;
+            isRemappingKey = false; // Ensure remapping is off
+            currentRemapAction = null;
+            // Only attempt to lock if chat is not visible
+            if (!chatContainer.classList.contains('visible') && !controls.isLocked) {
+                controls.lock();
+            }
+        }
+
+        /**
+         * Toggles the visibility of the settings container.
+         */
+        function toggleSettingsVisibility() {
+            if (settingsContainer.classList.contains('visible')) {
+                closeSettingsMenu();
+            } else {
+                openSettingsMenu();
+            }
+        }
+
+        /**
+         * Handles mouse wheel events for camera zoom.
+         * @param {WheelEvent} event - The wheel event.
+         */
+        function onWheel(event) {
+            event.preventDefault(); // Prevent default scroll behavior (e.g., page scrolling)
+
+            // Adjust cameraZoomDistance based on scroll direction
+            // Scrolling up (deltaY negative) zooms in, scrolling down (deltaY positive) zooms out
+            cameraZoomDistance += event.deltaY * 0.005; // Smaller multiplier for smoother zoom
+
+            // Clamp the zoom distance within defined limits
+            cameraZoomDistance = Math.max(minCameraZoom, Math.min(maxCameraZoom, cameraZoomDistance));
+
+            // Apply the new zoom distance to the camera's local Z position
+            // The camera is a child of controls.getObject(), so its position is relative to that.
+            camera.position.z = cameraZoomDistance;
+
+            // Update BokehPass focus if it's active
+            if (bokehPass) {
+                // Recalculate distance from camera to playerContainer's center
+                // Since camera.position.z is relative to controls.getObject(), which is at playerContainer's position,
+                // the focus should be adjusted based on the current camera's local Z.
+                // A simpler approach might be to just set focus to a fixed value or based on `cameraZoomDistance`
+                // if the depth of field effect is primarily for the player.
+                // For now, we'll keep it simple and assume the player is always at the "center" of the controls object.
+                bokehPass.uniforms.focus.value = Math.abs(camera.position.z); // Adjust focus based on camera's distance
+            }
+        }
+
+        /**
+         * Initializes the Three.js scene, camera, renderer, and controls.
+         * Sets up the interactive sphere, character, and event listeners for the chat and movement.
+         */
+        function init() {
+            // Get reference to compass elements
+            compassIndicator = document.getElementById('compass-indicator');
+            compassElement = document.getElementById('compass');
+            compassStudsContainer = document.getElementById('compass-studs');
+
+            // Get reference to health bar elements
+            healthBarFill = document.getElementById('health-bar-fill');
+            healthText = document.getElementById('health-text');
+
+            // Populate compass studs
+            for (let i = 0; i < 360; i += 15) { // Every 15 degrees
+                if (i % 45 !== 0) { // Don't add studs where N, NE, E, etc. are
+                    const stud = document.createElement('div');
+                    stud.classList.add('compass-stud');
+                    stud.style.transform = `rotate(${i}deg) translateY(-35px)`; // Position studs around the circle
+                    compassStudsContainer.appendChild(stud);
+                }
+            }
+
+
+            // Create the scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x282c34); // Dark background
+
+            // Create the camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Position camera behind and slightly above the character for a third-person follow view
+            // This is relative to the controls.getObject() which is child of playerContainer
+            camera.position.set(0, normalCameraHeightOffset, cameraZoomDistance); // Use cameraZoomDistance for initial Z
+
+            // Create the renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Enable shadow maps for realistic shadows
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // For softer shadows
+
+            // --- Post-processing setup for Depth of Field and Bloom ---
+            composer = new THREE.EffectComposer(renderer);
+            renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // BokehPass for Depth of Field
+            bokehPass = new THREE.BokehPass(scene, camera, {
+                focus: Math.abs(cameraZoomDistance),    // Distance to the focus point, initially based on cameraZoomDistance
+                aperture: 0.00005, // Amount of blur (smaller value = less blur)
+                maxblur: 0.01, // Max blur amount (larger value = more blur)
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+            composer.addPass(bokehPass);
+
+            bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+            bloomPass.threshold = 0.1;
+            bloomPass.strength = 0.5;
+            bloomPass.radius = 0.5;
+            composer.addPass(bloomPass);
+
+            // Create PointerLockControls for first-person camera interaction
+            controls = new THREE.PointerLockControls(camera, document.body); // Control camera with mouse
+
+            // Add event listener to lock pointer on canvas click
+            renderer.domElement.addEventListener('click', () => {
+                if (!chatContainer.classList.contains('visible') && !settingsContainer.classList.contains('visible') && !controls.isLocked) {
+                    console.log('Attempting to lock pointer from canvas click...');
+                    controls.lock();
+                }
+            });
+
+            // Handle pointer lock change (e.g., if user presses Esc)
+            controls.addEventListener('lock', function () {
+                console.log('PointerLock: Enabled');
+                chatContainer.classList.remove('visible');
+                settingsContainer.classList.remove('visible');
+                isTyping = false;
+                isSettingsOpen = false;
+            });
+            controls.addEventListener('unlock', function () {
+                console.log('PointerLock: Disabled');
+            });
+
+            // Add error listener for Pointer Lock API
+            document.addEventListener('pointerlockerror', function (event) {
+                console.error('Pointer lock error:', event);
+                chatOutput.value = "Pointer lock failed. Please click the 3D scene to re-enable controls.";
+                openChatMenu();
+            }, false);
+
+
+            // --- Cannon.js Physics World Setup ---
+            world = new CANNON.World();
+            world.gravity.set(0, 0, 0); // Set initial gravity to zero, we'll apply custom spherical gravity
+            world.broadphase = new CANNON.SAPBroadphase(world); // Optimized broadphase
+            world.allowSleep = true; // Allow bodies to sleep to save CPU
+
+            // Default contact material (friction, restitution)
+            const defaultMaterial = new CANNON.Material("defaultMaterial");
+            const defaultContactMaterial = new CANNON.ContactMaterial(
+                defaultMaterial,
+                defaultMaterial,
+                {
+                    friction: 0.5,
+                    restitution: 0.2,
+                    contactEquationStiffness: 1e8, // Reduce jitter
+                    contactEquationRelaxation: 3
+                }
+            );
+            world.addContactMaterial(defaultContactMaterial);
+
+
+            // Add a glowing sphere to the scene (Oracle)
+            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x007bff });
+            sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            scene.add(sphere);
+
+            // Create Cannon.js body for the Oracle sphere
+            const sphereShape = new CANNON.Sphere(1);
+            sphereBody = new CANNON.Body({ mass: 1, shape: sphereShape, material: defaultMaterial });
+            sphereBody.position.set(5, 1, -5); // Initial position
+            world.addBody(sphereBody);
+
+
+            // --- Earth Sphere Generation (with realistic texture) ---
+            const earthRadius = 200;
+            const earthSegments = 128;
+            const earthGeometry = new THREE.SphereGeometry(earthRadius, earthSegments, earthSegments);
+
+            const textureLoader = new THREE.TextureLoader();
+            const earthTexture = textureLoader.load(
+                'https://placehold.co/2048x1024/000000/FFFFFF?text=EARTH',
+                function (texture) {
+                    console.log('Earth texture loaded successfully.');
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    texture.repeat.set(1, 1);
+                },
+                undefined,
+                function (err) {
+                    console.error('An error occurred loading the Earth texture.', err);
+                }
+            );
+
+            const earthMaterial = new THREE.MeshStandardMaterial({
+                map: earthTexture,
+                roughness: 0.9,
+                metalness: 0.1,
+                color: 0x8B4513
+            });
+            earth = new THREE.Mesh(earthGeometry, earthMaterial);
+            earth.position.y = -earthRadius;
+            earth.receiveShadow = true;
+            scene.add(earth);
+
+            // Create Cannon.js body for the Earth (static body, mass 0)
+            const earthShape = new CANNON.Sphere(earthRadius);
+            earthBody = new CANNON.Body({ mass: 0, shape: earthShape, material: defaultMaterial });
+            earthBody.position.set(earth.position.x, earth.position.y, earth.position.z);
+            world.addBody(earthBody);
+
+
+            // --- Sky Dome (Simple Gradient) ---
+            const skyGeometry = new THREE.SphereGeometry(500, 32, 15);
+            const skyMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x0077FF) },
+                    bottomColor: { value: new THREE.Color(0xFFFFFF) },
+                    offset: { value: 33 },
+                    exponent: { value: 0.6 }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    uniform float offset;
+                    uniform float exponent;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize( vWorldPosition + offset ).y;
+                        gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h, 0.0 ), exponent ), 0.0 ) ), 1.0 );
+                    }
+                `,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(sky);
+
+            // --- Lighting for Day/Night Cycle ---
+            sunLight = new THREE.DirectionalLight(0xFFFFFF, 1);
+            sunLight.position.set(0, 10, 0);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 500;
+            sunLight.shadow.camera.left = -200;
+            sunLight.shadow.camera.right = 200;
+            sunLight.shadow.camera.top = 200;
+            sunLight.shadow.camera.bottom = -200;
+            scene.add(sunLight);
+
+            const sunGeometry = new THREE.SphereGeometry(15, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffe082, emissive: 0xffa000, emissiveIntensity: 1.5 });
+            sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+            scene.add(sunMesh);
+
+            moonLight = new THREE.DirectionalLight(0xADD8E6, 0.2);
+            moonLight.position.set(0, -10, 0);
+            moonLight.castShadow = true;
+            moonLight.shadow.mapSize.width = 1024;
+            moonLight.shadow.mapSize.height = 1024;
+            moonLight.shadow.camera.near = 0.5;
+            moonLight.shadow.camera.far = 500;
+            moonLight.shadow.camera.left = -200;
+            moonLight.shadow.camera.right = 200;
+            moonLight.shadow.camera.top = 200;
+            moonLight.shadow.camera.bottom = -200;
+            scene.add(moonLight);
+
+            const moonGeometry = new THREE.SphereGeometry(8, 32, 32);
+            const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, emissive: 0x888888, emissiveIntensity: 0.5 });
+            moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
+            scene.add(moonMesh);
+
+            ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+
+            // --- Stars ---
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsVertices = [];
+            for (let i = 0; i < 5000; i++) {
+                const x = (Math.random() - 0.5) * 1000;
+                const y = (Math.random() - 0.5) * 1000;
+                const z = (Math.random() - 0.5) * 1000;
+                starsVertices.push(x, y, z);
+            }
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            const starsMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.5,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true,
+                opacity: 0
+            });
+            stars = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(stars);
+
+
+            // Create a player container group to handle spherical alignment
+            playerContainer = new THREE.Group();
+            scene.add(playerContainer);
+            playerContainer.add(controls.getObject()); // controls.getObject() contains the camera
+
+            // Create Cannon.js body for the player
+            const playerHeight = 1.8; // Approximate height of a humanoid character
+            const playerRadius = 0.3; // Approximate radius of a humanoid character
+            const playerShape = new CANNON.Cylinder(playerRadius, playerRadius, playerHeight, 16);
+            playerBody = new CANNON.Body({ mass: 70, shape: playerShape, material: defaultMaterial }); // Mass of 70kg
+            playerBody.fixedRotation = true; // Prevent player from rolling over due to physics
+            playerBody.updateMassProperties();
+
+            // Initial position of player body (on top of the Earth)
+            const initialPlayerY = earth.position.y + earthRadius + (playerHeight / 2);
+            playerBody.position.set(0, initialPlayerY, 0);
+            world.addBody(playerBody);
+
+            // Adjust Oracle's initial position to be on the Earth's surface
+            sphereBody.position.set(10, earth.position.y + earthRadius + sphereShape.radius, -10);
+
+            // --- Load GLB Character Model ---
+            const gltfLoader = new THREE.GLTFLoader();
+            // IMPORTANT: Replace 'path/to/your/Soldier.glb' with the actual path to your GLB file.
+            // You can use a generic animated GLB model like Mixamo's Y Bot or a simple soldier model.
+            gltfLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/models/gltf/Soldier.glb', function (gltf) {
+                // If a previous character existed (e.g., box character), remove it
+                if (character) {
+                    controls.getObject().remove(character);
+                    character.traverse(obj => {
+                        if (obj.geometry) obj.geometry.dispose();
+                        if (obj.material) obj.material.dispose();
+                    });
+                }
+
+                character = gltf.scene;
+                // Adjust scale of the loaded model to fit the scene and physics body
+                // Soldier.glb is usually very large, so scaling down is crucial.
+                const scaleFactor = 0.01; // Adjust this based on your GLB model's size
+                character.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+                // Calculate the visual offset needed for the character to stand on the physics body
+                // The GLB model's pivot might not be at its base.
+                // A rough estimate: if the character's height is 'playerHeight', its base is at -playerHeight/2 from its center.
+                // The playerBody's center is at playerBody.position.y.
+                // So, character's local Y should be -playerHeight / 2 * scaleFactor.
+                // Let's use a more direct visual adjustment:
+                character.position.y = -playerHeight / 2 * scaleFactor; // Adjust based on GLB's pivot and scale
+
+                character.traverse(function (object) {
+                    if (object.isMesh) {
+                        object.castShadow = true;
+                        object.receiveShadow = true;
+                    }
+                });
+                controls.getObject().add(character); // Add the GLB scene to the controls object
+
+                mixer = new THREE.AnimationMixer(character);
+                gltf.animations.forEach((clip) => {
+                    const action = mixer.clipAction(clip);
+                    animations[clip.name] = action; // Store actions by name
+                    console.log(`Loaded animation: ${clip.name}`); // Log loaded animations
+                });
+
+                // Play initial animation (e.g., idle)
+                if (animations['Idle']) { // Assuming an "Idle" animation exists
+                    setAnimation('Idle');
+                } else if (gltf.animations.length > 0) {
+                    // Fallback: play the first animation if 'Idle' is not found
+                    setAnimation(gltf.animations[0].name);
+                }
+
+            }, undefined, function (error) {
+                console.error('An error occurred loading the GLB model:', error);
+            });
+
+
+            // Raycaster for detecting clicks on 3D objects
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Event listeners
+            window.addEventListener('resize', onWindowResize, false);
+            renderer.domElement.addEventListener('click', onCanvasMouseDown, false);
+            renderer.domElement.addEventListener('wheel', onWheel, false);
+
+            chatInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (chatInput.value.trim() !== '') {
+                        askOracle();
+                    }
+                }
+            });
+
+            // Keybind settings event listeners
+            keybindInputs.forEach(input => {
+                input.addEventListener('click', () => {
+                    isRemappingKey = true;
+                    currentRemapAction = input.dataset.action;
+                    input.value = 'Press a key...';
+                });
+            });
+
+            window.addEventListener('keydown', onKeyDown, false);
+            window.addEventListener('keyup', onKeyUp, false);
+
+            // Populate initial keybinds
+            populateKeybindSettings();
+        }
+
+        /**
+         * Sets the current animation for the character with a smooth cross-fade.
+         * @param {string} name - The name of the animation clip to play.
+         */
+        function setAnimation(name) {
+            if (!mixer || !animations[name] || currentAnimation === name) {
+                return; // No mixer, animation not found, or already playing
+            }
+
+            const prevAction = animations[currentAnimation];
+            const newAction = animations[name];
+
+            // If there's a previous animation, fade it out
+            if (prevAction) {
+                prevAction.fadeOut(animationFadeDuration);
+            }
+
+            newAction.reset().fadeIn(animationFadeDuration).play();
+            currentAnimation = name;
+        }
+
+        /**
+         * Handles window resizing to adjust camera aspect ratio, renderer, and composer size.
+         */
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+            bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * Handles mouse down events on the canvas for interacting with 3D objects.
+         * Used to detect clicks on the Oracle.
+         * @param {MouseEvent} event - The mouse event.
+         */
+        function onCanvasMouseDown(event) {
+            // Only proceed if pointer is locked (i.e., in gameplay mode)
+            if (controls.isLocked) {
+                // Calculate mouse position in normalized device coordinates (-1 to +1)
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                // Update the raycaster with the camera and mouse position
+                raycaster.setFromCamera(mouse, camera);
+
+                // Calculate objects intersecting the raycaster
+                const intersects = raycaster.intersectObjects(scene.children);
+
+                // Check if the sphere (Oracle) was clicked
+                if (intersects.length > 0 && intersects[0].object === sphere) {
+                    toggleChatVisibility();
+                }
+            }
+        }
+
+        /**
+         * Handles keydown events for character movement and actions.
+         * @param {KeyboardEvent} event - The keyboard event.
+         */
+        function onKeyDown(event) {
+            // If remapping a key, capture the key and update the keyMap
+            if (isRemappingKey && currentRemapAction) {
+                event.preventDefault();
+                keyMap[currentRemapAction] = event.code;
+                document.getElementById(`keybind-${currentRemapAction}`).value = getReadableKey(event.code);
+                isRemappingKey = false;
+                currentRemapAction = null;
+                return;
+            }
+
+            // Handle global menu/settings toggles
+            if (event.code === keyMap['toggleChat']) {
+                if (!isSettingsOpen) {
+                    toggleChatVisibility();
+                }
+                event.preventDefault();
+                return;
+            }
+            if (event.code === keyMap['toggleSettings']) {
+                toggleSettingsVisibility();
+                event.preventDefault();
+                return;
+            }
+            if (event.code === 'Escape') {
+                if (isChatOpen() || isSettingsOpen) {
+                    closeChatMenu();
+                    closeSettingsMenu();
+                    event.preventDefault();
+                }
+                return;
+            }
+
+            // Handle 'K' key to toggle camera lock (pointer lock)
+            if (event.code === keyMap['toggleLock']) {
+                if (document.pointerLockElement === renderer.domElement) {
+                    controls.unlock();
+                } else {
+                    if (!isChatOpen() && !isSettingsOpen) {
+                        console.log('Attempting to lock pointer from K key...');
+                        controls.lock();
+                    }
+                }
+                event.preventDefault();
+                return;
+            }
+
+            // Handle '/' key for typing mode
+            if (event.code === keyMap['startTyping'] && !chatInput.matches(':focus')) {
+                openChatMenu();
+                event.preventDefault();
+                return;
+            }
+
+            // Only process movement keys if pointer is locked and no menus are open
+            if (!controls.isLocked || isTyping || isSettingsOpen) return;
+
+            // Movement keys based on keyMap
+            if (event.code === keyMap['forward']) keys.forward = true;
+            if (event.code === keyMap['backward']) keys.backward = true;
+            if (event.code === keyMap['left']) keys.left = true;
+            if (event.code === keyMap['right']) keys.right = true;
+            if (event.code === keyMap['jump']) keys.jump = true;
+            if (event.code === keyMap['crouch']) {
+                if (!keys.crouch) {
+                    keys.crouch = true;
+                    isCrouching = !isCrouching;
+                }
+            }
+            if (event.code === keyMap['sprint']) keys.sprint = true;
+        }
+
+        /**
+         * Handles keyup events for character movement and actions.
+         * @param {KeyboardEvent} event - The keyboard event.
+         */
+        function onKeyUp(event) {
+            // If remapping, do nothing on keyup
+            if (isRemappingKey) return;
+
+            // Only process movement keys if pointer is locked and no menus are open
+            if (!controls.isLocked || isTyping || isSettingsOpen) return;
+
+            // Movement keys based on keyMap
+            if (event.code === keyMap['forward']) keys.forward = false;
+            if (event.code === keyMap['backward']) keys.backward = false;
+            if (event.code === keyMap['left']) keys.left = false;
+            if (event.code === keyMap['right']) keys.right = false;
+            if (event.code === keyMap['jump']) keys.jump = false;
+            if (event.code === keyMap['crouch']) keys.crouch = false;
+            if (event.code === keyMap['sprint']) keys.sprint = false;
+        }
+
+        /**
+         * Helper to check if chat is open.
+         */
+        function isChatOpen() {
+            return chatContainer.classList.contains('visible');
+        }
+
+        /**
+         * Updates the character's position based on pressed keys,
+         * and applies jumping/crouching physics using Cannon.js.
+         */
+        function updateCharacterMovement() {
+            const playerObject = controls.getObject(); // This is the Object3D that holds the camera
+
+            // Store previous position for experience calculation
+            const prevPosition = new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+
+            currentMoveSpeed = keys.sprint ? sprintSpeed : walkSpeed;
+
+            // Get the camera's current world orientation
+            const cameraWorldDirection = new THREE.Vector3();
+            playerObject.getWorldDirection(cameraWorldDirection);
+
+            // Calculate the surface normal at the player's current position (from playerBody)
+            const surfaceNormal = new THREE.Vector3().subVectors(new THREE.Vector3().copy(playerBody.position), new THREE.Vector3().copy(earthBody.position)).normalize();
+
+            // Project the camera's world forward direction onto the plane perpendicular to the surface normal
+            const moveForward = cameraWorldDirection.clone().projectOnPlane(surfaceNormal).normalize();
+
+            // Calculate the right vector, perpendicular to moveForward and surfaceNormal
+            const moveRight = new THREE.Vector3().crossVectors(moveForward, surfaceNormal).normalize();
+
+            // Apply horizontal movement forces to the playerBody
+            let isMoving = false;
+            const moveForce = 5000; // Force to apply for movement
+            const impulseApplicationPoint = new CANNON.Vec3(playerBody.position.x, playerBody.position.y - playerBody.shapes[0].height / 2, playerBody.position.z); // Apply at feet
+
+            let targetHorizontalVelocity = new THREE.Vector3(0, 0, 0);
+
+            if (keys.forward) {
+                targetHorizontalVelocity.addScaledVector(moveForward, currentMoveSpeed);
+                isMoving = true;
+            }
+            if (keys.backward) {
+                targetHorizontalVelocity.addScaledVector(moveForward, -currentMoveSpeed);
+                isMoving = true;
+            }
+            if (keys.left) {
+                targetHorizontalVelocity.addScaledVector(moveRight, -currentMoveSpeed);
+                isMoving = true;
+            }
+            if (keys.right) {
+                targetHorizontalVelocity.addScaledVector(moveRight, currentMoveSpeed);
+                isMoving = true;
+            }
+
+            // Calculate the impulse needed to reach the target velocity
+            const currentVelocity = new THREE.Vector3(playerBody.velocity.x, playerBody.velocity.y, playerBody.velocity.z);
+            const currentHorizontalVelocity = currentVelocity.clone().projectOnPlane(surfaceNormal); // Only consider horizontal component
+
+            const desiredVelocityChange = new THREE.Vector3().subVectors(targetHorizontalVelocity.multiplyScalar(moveForce), currentHorizontalVelocity);
+            const impulse = new CANNON.Vec3(desiredVelocityChange.x, desiredVelocityChange.y, desiredVelocityChange.z);
+
+            // Apply impulse only if there's a significant velocity difference
+            if (impulse.length() > 0.1) {
+                 playerBody.applyImpulse(impulse, impulseApplicationPoint);
+            }
+
+            // Adjust linear damping: higher when not moving, lower when moving
+            playerBody.linearDamping = isMoving ? 0.05 : 0.9; // Reduced damping for movement, increased for stopping
+
+
+            // Character Animation (GLB)
+            if (character && mixer) {
+                if (isMoving && isGrounded) {
+                    setAnimation(keys.sprint ? 'Run' : 'Walk'); // Assuming 'Run' and 'Walk' animations exist
+                } else if (isGrounded) {
+                    setAnimation('Idle'); // Assuming 'Idle' animation exists
+                } else { // Airborne
+                    setAnimation('Jump'); // Assuming 'Jump' animation exists, or a generic airborne pose
+                }
+            }
+
+
+            // Calculate distance moved for experience gain
+            const movedDistance = prevPosition.distanceTo(new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z));
+            playerExperience += movedDistance * experiencePerMove;
+
+            // Scale the Oracle based on player experience
+            if (sphere) {
+                const newScale = 1 + playerExperience * oracleScaleFactor;
+                sphere.scale.set(newScale, newScale, newScale);
+            }
+
+            // Spherical gravity (applied as a force to playerBody)
+            const earthCenter = earthBody.position;
+            const playerPos = playerBody.position;
+            const direction = new CANNON.Vec3();
+            playerPos.vsub(earthCenter, direction);
+            direction.normalize();
+            // Apply force towards the center of the Earth
+            playerBody.applyForce(direction.scale(-gravityStrength * playerBody.mass), playerBody.position);
+
+
+            // Grounded check using Cannon.js contacts (more robust)
+            isGrounded = false;
+            for (let i = 0; i < world.contacts.length; i++) {
+                const contact = world.contacts[i];
+                // Check if the contact involves the player body and the earth body
+                if ((contact.bi === playerBody && contact.bj === earthBody) ||
+                    (contact.bj === playerBody && contact.bi === earthBody)) {
+                    // Check if the contact normal is pointing generally upwards relative to the player
+                    const normal = new CANNON.Vec3();
+                    if (contact.bi === playerBody) {
+                        normal.copy(contact.ni);
+                    } else { // contact.bj === playerBody
+                        normal.copy(contact.ni).negate();
+                    }
+
+                    const playerUp = new CANNON.Vec3(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
+                    const dot = normal.dot(playerUp);
+                    const angleThreshold = 0.7; // Increased threshold for stricter ground detection (cos(45 deg) is ~0.707)
+
+                    if (dot > angleThreshold) {
+                        isGrounded = true;
+                        isJumping = false; // Reset jump state if grounded
+                        break;
+                    }
+                }
+            }
+
+            // Jumping mechanics
+            if (keys.jump && isGrounded && !isJumping) {
+                // Apply jump force along the surface normal (outwards)
+                const impulseDirection = new CANNON.Vec3(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
+                playerBody.applyImpulse(impulseDirection.scale(jumpForce * playerBody.mass), playerBody.position);
+                isJumping = true;
+                isGrounded = false; // Immediately set to false after jump impulse
+            }
+
+            // Crouching mechanics: Smoothly interpolate camera height offset
+            const targetCameraHeightOffset = isCrouching ? crouchCameraHeightOffset : normalCameraHeightOffset;
+            if (Math.abs(currentCameraHeightOffset - targetCameraHeightOffset) > 0.001) {
+                if (currentCameraHeightOffset < targetCameraHeightOffset) {
+                    currentCameraHeightOffset = Math.min(currentCameraHeightOffset + crouchTransitionSpeed, targetCameraHeightOffset);
+                } else {
+                    currentCameraHeightOffset = Math.max(currentCameraHeightOffset - crouchTransitionSpeed, targetCameraHeightOffset);
+                }
+            }
+
+            // Update BokehPass focus to keep the player in focus
+            if (bokehPass) {
+                const distanceToPlayer = camera.position.distanceTo(playerContainer.position);
+                bokehPass.uniforms.focus.value = distanceToPlayer;
+            }
+
+            // Update compass rotation
+            if (compassElement && controls.isLocked) {
+                const playerForward = new THREE.Vector3(0, 0, -1);
+                playerForward.applyQuaternion(playerContainer.quaternion);
+
+                playerForward.y = 0;
+                playerForward.normalize();
+
+                const angleRad = Math.atan2(playerForward.x, playerForward.z);
+                const angleDeg = angleRad * (180 / Math.PI);
+
+                compassElement.style.transform = `translateX(-50%) rotate(${-angleDeg}deg)`;
+            }
+
+            // Update health bar
+            if (playerHealth > 0) {
+                playerHealth = Math.max(0, playerHealth - 0.01);
+            }
+            healthBarFill.style.width = `${playerHealth}%`;
+            healthText.textContent = `${Math.round(playerHealth)}%`;
+
+            if (playerHealth > 50) {
+                healthBarFill.style.backgroundColor = '#00ff00';
+            } else if (playerHealth > 20) {
+                healthBarFill.style.backgroundColor = '#ffa500';
+            } else {
+                healthBarFill.style.backgroundColor = '#ff0000';
+            }
+        }
+
+        /**
+         * Updates the lighting and sky colors to simulate a day/night cycle.
+         */
+        function updateDayNightCycle() {
+            const framesPerCycle = dayCycleDurationSeconds * 60;
+            timeOfDay += 1 / framesPerCycle;
+
+            if (timeOfDay > 1) {
+                timeOfDay = 0;
+            }
+
+            const angle = timeOfDay * Math.PI * 2;
+            const lightDistance = 200;
+
+            sunLight.position.x = Math.sin(angle) * lightDistance;
+            sunLight.position.y = Math.cos(angle) * lightDistance;
+            sunLight.position.z = 0;
+
+            moonLight.position.x = Math.sin(angle + Math.PI) * lightDistance;
+            moonLight.position.y = Math.cos(angle + Math.PI) * lightDistance;
+            moonLight.position.z = 0;
+
+            sunMesh.position.copy(sunLight.position);
+            moonMesh.position.copy(moonLight.position);
+
+            let sunIntensity = 0;
+            let moonIntensity = 0;
+            let ambientFactor = 0;
+            let skyColor = new THREE.Color();
+            let starsOpacity = 0;
+
+            if (timeOfDay >= 0.2 && timeOfDay < 0.8) {
+                const dayProgress = (timeOfDay - 0.2) / 0.6;
+                sunIntensity = Math.sin(dayProgress * Math.PI) * 1.5 + 0.5;
+                ambientFactor = 0.5 + Math.sin(dayProgress * Math.PI) * 0.3;
+                skyColor.setHSL(0.6, 0.5, 0.5 + dayProgress * 0.2);
+                starsOpacity = 0;
+                moonIntensity = 0;
+            } else {
+                let nightProgress;
+                if (timeOfDay >= 0.8) {
+                    nightProgress = (timeOfDay - 0.8) / 0.4;
+                } else {
+                    nightProgress = (timeOfDay + 0.2) / 0.4;
+                }
+
+                sunIntensity = 0;
+                moonIntensity = Math.sin(nightProgress * Math.PI) * 0.5 + 0.1;
+                ambientFactor = 0.1 + Math.sin(nightProgress * Math.PI) * 0.1;
+                skyColor.setHSL(0.6, 0.2, 0.1 + nightProgress * 0.1);
+                starsOpacity = Math.sin(nightProgress * Math.PI);
+
+                if (starsOpacity > 0) {
+                    stars.material.opacity = starsOpacity * (0.7 + Math.sin(performance.now() * 0.01) * 0.3);
+                }
+            }
+
+            sunLight.intensity = sunIntensity;
+            sunLight.color.setHSL(0.1, 0.8, sunIntensity * 0.5 + 0.2);
+
+            moonLight.intensity = moonIntensity;
+            moonLight.color.setHSL(0.6, 0.3, moonIntensity * 0.5 + 0.1);
+
+            ambientLight.intensity = ambientFactor;
+            ambientLight.color.setHSL(0.6, 0.2, ambientFactor * 0.5 + 0.1);
+
+            scene.children.forEach(obj => {
+                if (obj.geometry instanceof THREE.SphereGeometry && obj.material instanceof THREE.ShaderMaterial) {
+                    obj.material.uniforms.topColor.value.copy(skyColor);
+                    obj.material.uniforms.bottomColor.value.copy(skyColor.clone().multiplyScalar(0.7));
+                }
+            });
+            scene.background.copy(skyColor);
+
+            if (stars && starsOpacity === 0) {
+                stars.material.opacity = 0;
+            }
+
+            if (sunMesh) {
+                sunMesh.material.opacity = sunIntensity > 0.1 ? 1 : 0;
+                sunMesh.material.emissiveIntensity = sunIntensity * 1.5;
+                sunMesh.visible = sunIntensity > 0.1;
+            }
+            if (moonMesh) {
+                moonMesh.material.opacity = moonIntensity > 0.05 ? 1 : 0;
+                moonMesh.material.emissiveIntensity = moonIntensity * 1.5;
+                moonMesh.visible = moonIntensity > 0.05;
+            }
+        }
+
+
+        /**
+         * Disables/enables all interactive elements in the chat interface.
+         * @param {boolean} disabled - True to disable, false to enable.
+         */
+        function setChatControlsDisabled(disabled) {
+            chatInput.disabled = disabled;
+            loadingIndicator.style.display = disabled ? 'block' : 'none';
+        }
+
+        /**
+         * Calls the Gemini API with the user's question and displays the response.
+         */
+        async function askOracle() {
+            const prompt = chatInput.value.trim();
+            if (!prompt) {
+                chatOutput.value = "Please enter a question for the Oracle.";
+                return;
+            }
+
+            chatOutput.value = '';
+            setChatControlsDisabled(true);
+
+            try {
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = { contents: chatHistory };
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    chatOutput.value = text;
+                } else {
+                    chatOutput.value = "Oracle is silent... (No valid response from API)";
+                    console.error("Unexpected API response structure:", result);
+                }
+            } catch (error) {
+                chatOutput.value = "Oracle is disturbed... (Error communicating with API)";
+                console.error("Error calling Gemini API:", error);
+            } finally {
+                setChatControlsDisabled(false);
+                chatInput.value = '';
+            }
+        }
+
+        /**
+         * Animation loop.
+         * This function is called repeatedly to render the scene and update controls.
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta(); // Get delta time for mixer update
+
+            // Update physics world
+            world.step(timeStep);
+
+            // Synchronize Three.js meshes with Cannon.js bodies
+            earth.position.copy(earthBody.position);
+            earth.quaternion.copy(earthBody.quaternion);
+
+            sphere.position.copy(sphereBody.position);
+            sphere.quaternion.copy(sphereBody.quaternion);
+
+            // PlayerContainer (which holds the camera and character mesh) follows playerBody position
+            playerContainer.position.copy(playerBody.position);
+
+            // --- Align playerContainer's UP vector with the surface normal ---
+            const earthCenter = earthBody.position;
+            const playerPos = playerBody.position;
+
+            // Calculate the 'up' direction for the player relative to the Earth's center
+            const desiredUp = new THREE.Vector3().subVectors(playerPos, earthCenter).normalize();
+
+            // Get the current 'forward' direction of the camera (which dictates player's horizontal facing)
+            const cameraForward = new THREE.Vector3(0, 0, -1); // Local Z- is camera forward
+            controls.getObject().getWorldDirection(cameraForward); // Get camera's world forward direction
+
+            // Project camera's world forward onto the plane perpendicular to the desiredUp vector
+            const desiredForward = cameraForward.clone().projectOnPlane(desiredUp).normalize();
+
+            // Calculate the 'right' vector
+            const desiredRight = new THREE.Vector3().crossVectors(desiredUp, desiredForward).normalize();
+
+            // Create a rotation matrix from these three orthonormal basis vectors
+            const matrix = new THREE.Matrix4();
+            matrix.makeBasis(desiredRight, desiredUp, desiredForward.clone().negate()); // Z-axis is typically forward in Three.js
+
+            // Set the playerContainer's quaternion from this matrix
+            playerContainer.quaternion.setFromRotationMatrix(matrix);
+
+
+            // Rotate the sphere slightly for visual interest
+            if (sphere) {
+                sphere.rotation.y += 0.005;
+            }
+
+            // Animate the Earth to rotate
+            if (earth) {
+                earth.rotation.y += 0.0005;
+            }
+
+            // Update day/night cycle
+            updateDayNightCycle();
+
+            // Only update character movement if pointer is locked and not typing or in settings
+            if (controls.isLocked && !isTyping && !isSettingsOpen) {
+                updateCharacterMovement();
+            }
+
+            // Update animation mixer
+            if (mixer) {
+                mixer.update(delta);
+            }
+
+            // Render the scene using the composer for post-processing effects
+            composer.render();
+        }
+
+        // Initialize the scene when the window loads
+        window.onload = function() {
+            init();
+            animate();
+        };
+    </script>
+</body>
+</html>
