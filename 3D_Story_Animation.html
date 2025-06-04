@@ -1,0 +1,1980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Dream Begins - 3D Animation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Hide scrollbars */
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* Dark background */
+            color: #e0e0e0; /* Light text */
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay for text */
+            transition: opacity 1s ease-in-out;
+            opacity: 1; /* Start visible */
+        }
+        #story-text {
+            font-size: 1.5rem;
+            text-align: center;
+            max-width: 800px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        #character-name {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #00ffff; /* Cyan for character names */
+            margin-bottom: 10px;
+        }
+        #next-button, #ask-heart-button, #mute-button {
+            background-color: #00ffff;
+            color: #1a1a2e;
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.4);
+            margin: 10px;
+        }
+        #next-button:hover, #ask-heart-button:hover, #mute-button:hover {
+            background-color: #00e0e0;
+            transform: translateY(-2px);
+        }
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #e0e0e0;
+            font-size: 2rem;
+            z-index: 100;
+            transition: opacity 1s ease-out;
+        }
+        #button-container {
+            display: flex;
+            gap: 20px; /* Space between buttons */
+            margin-top: 20px;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #00ffff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+            display: none; /* Hidden by default */
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">Loading 3D Story...</div>
+    <div id="overlay">
+        <div id="character-name"></div>
+        <div id="story-text"></div>
+        <div id="button-container">
+            <button id="ask-heart-button" style="display: none;">✨ Ask Heart for more thoughts ✨</button>
+            <div id="loading-spinner" class="loading-spinner"></div>
+            <button id="next-button">Start Story</button>
+            <button id="mute-button">Mute</button>
+        </div>
+    </div>
+    <canvas id="storyCanvas"></canvas>
+
+    <script type="module">
+        // Global variables for Firebase configuration, if needed for future LLM calls
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // THREE.js scene variables
+        let scene, camera, renderer;
+        let ambientLight, directionalLight;
+        let animationFrameId; // To store the requestAnimationFrame ID for cleanup
+
+        // Objects for the scene
+        let dreamParticles, xingSphere, xerxSphere, mirrorPlane, monitorPlane, cigaretteMesh;
+        let bookWallGroup, fallingBook, glowingHeart;
+        let memoryParticles, therapyGroupSpheres;
+        let metaversePlanes;
+        let currentSceneIndex = 0;
+        let textUpdateTimeout; // To manage text display timeouts
+        let isLLMResponseActive = false; // Flag to track if LLM response is currently displayed
+
+        // Audio variables
+        let currentAudio = null;
+        let isMuted = false;
+
+        // Mouse interaction variables for camera control
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        let rotationSpeed = 0.005;
+
+        // DOM elements - Declared globally, but assigned within init to ensure DOM is ready
+        let storyTextElement;
+        let characterNameElement;
+        let nextButton;
+        let askHeartButton;
+        let loadingSpinner;
+        let loadingScreen;
+        let buttonContainer;
+        let muteButton;
+
+
+        // Story data with text and associated 3D scene actions
+        const storyScenes = [
+            {
+                name: "Prologue",
+                character: "Narrator Voice",
+                text: "What is a story? A story is where boredom births imagination—a dream given voice. A space where worlds bloom from whispers, and reality flickers like candlelight. But sometimes, the dream doesn’t stay in the dream. It follows you, becomes a thought, then a memory. A promise. A danger. A love letter waiting to be opened.",
+                action: () => {
+                    // Initial scene: abstract particles representing dreams/imagination
+                    createDreamParticles();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(0, 0, 0);
+                },
+                llmFeature: false,
+                // =================================================================================
+                // >>> IMPORTANT: AUDIO FILE PATHS ARE PLACEHOLDERS AND MUST BE REPLACED! <<<
+                // The error "Failed to load because no supported source was found" means
+                // the browser cannot find or play the audio file at the specified path.
+                //
+                // YOU MUST:
+                // 1. Provide your own audio files (e.g., MP3, WAV).
+                // 2. Replace 'audio/prologue.mp3' (and all other 'audio/...' paths below)
+                //    with the actual, accessible URL or relative path to your audio file.
+                //
+                // Example:
+                // audioFile: 'https://your-domain.com/path/to/your/prologue_audio.mp3'
+                // OR if hosted locally (ensure the 'audio' folder exists and files are there):
+                // audioFile: 'assets/audio/prologue_audio.mp3'
+                // =================================================================================
+                audioFile: 'audio/prologue.mp3'
+            },
+            {
+                name: "Awakening of Xing",
+                character: "XING (internal monologue)",
+                text: "Where... am I? Fragments drift into his mind like ash: A brother. A name: Xerx. A book with a rose-shaped cover, a petal forever falling. The word 'Author'... but was he the writer, or just a written thought?",
+                action: () => {
+                    // Transition to Xing's awakening
+                    hideAllObjects();
+                    createXingAwakening();
+                    camera.position.set(0, 5, 15);
+                    camera.lookAt(xingSphere.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_awakening.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx’s Mirror",
+                character: "Narrator Voice",
+                text: "Elsewhere. A mirror. A cigarette. A glitch. Xerx brushes his teeth, stares into his own eyes—and sees someone else's reflection. He smokes. Breathes. Memories download silently onto a hidden server. He doesn’t question the glitch in the monitor behind him. Not anymore.",
+                action: () => {
+                    // Transition to Xerx's scene
+                    hideAllObjects();
+                    createXerxMirrorScene();
+                    camera.position.set(10, 5, 0);
+                    camera.lookAt(mirrorPlane.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_mirror.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "The Heart Appears",
+                character: "Narrator Voice",
+                text: "Back with Xing. The book weeps. One book falls from the infinite wall of stories. It weeps—pages shedding, turning to dust. In the center, a glowing heart.",
+                action: () => {
+                    // Transition back to Xing, books, and heart
+                    hideAllObjects();
+                    createBookWall();
+                    createXingAwakening(); // Xing is present again
+                    camera.position.set(0, 0, 15);
+                    camera.lookAt(0, 0, 0);
+                    // Simulate book falling and heart appearing after a delay
+                    setTimeout(() => {
+                        fallAndWeepBook();
+                        setTimeout(() => {
+                            createGlowingHeart();
+                            // Xing lifts the heart
+                            if (xingSphere && glowingHeart) {
+                                new TWEEN.Tween(glowingHeart.position)
+                                    .to({ y: xingSphere.position.y + 2, x: xingSphere.position.x + 1 }, 1500)
+                                    .easing(TWEEN.Easing.Quadratic.Out)
+                                    .start();
+                            }
+                        }, 2000); // Heart appears after book falls
+                    }, 1000); // Book falls after scene loads
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_appears.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart Speaks",
+                character: "HEART",
+                text: "Of course I can talk, idiot. You just weren’t listening.",
+                action: () => {
+                    // Heart pulsates
+                    if (glowingHeart) {
+                        glowingHeart.scale.set(1.1, 1.1, 1.1);
+                        new TWEEN.Tween(glowingHeart.scale)
+                            .to({ x: 1, y: 1, z: 1 }, 500)
+                            .easing(TWEEN.Easing.Elastic.Out)
+                            .yoyo(true)
+                            .repeat(Infinity)
+                            .start();
+                    }
+                    if (monitorPlane) {
+                        // Simulate monitor glitch
+                        monitorPlane.material.color.setHex(0xFF00FF); // Purple glitch
+                        setTimeout(() => monitorPlane.material.color.setHex(0x000000), 100);
+                        setTimeout(() => monitorPlane.material.color.setHex(0xFF00FF), 200);
+                        setTimeout(() => monitorPlane.material.color.setHex(0x000000), 300);
+                    }
+                },
+                llmFeature: true, // Enable LLM interaction for this scene
+                llmPrompt: "The Heart has just spoken for the first time, expressing annoyance at not being listened to. What else might the Heart be feeling or thinking at this moment, or what further cryptic advice might it offer about listening or its own nature? Respond as the 'Heart'.",
+                audioFile: 'audio/heart_speaks_1.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's New House",
+                character: "Narrator Voice",
+                text: "Xerx, falling from his dreaming, woke up in a new house surrounded by monitors and sad music playing in the background, his story only beginning.",
+                action: () => {
+                    hideAllObjects();
+                    createXerxNewHouseScene();
+                    camera.position.set(10, 5, 10);
+                    camera.lookAt(xerxSphere.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_new_house.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Infinite Wall",
+                character: "Narrator Voice",
+                text: "Xing opened his eyes to see a similar face looking back at him reading this book before writing down his number at the title of the book, getting his signature to save the state of the book for later use, his story writing itself with thoughts. Each word has a heavy meaning as he writes and reads along before a knock on his door bringing him back to the story as if the haze in his head lifts as he looks around to see where he is, surrounded by an infinite story wall as magic books fly around him giving him ideas and inspiration for his story before one book falls on the floor looking for a purpose.",
+                action: () => {
+                    hideAllObjects();
+                    createBookWall(true); // Create an infinite-like wall
+                    createXingAwakening();
+                    camera.position.set(0, 0, 20);
+                    camera.lookAt(0, 0, 0);
+                    // Animate books flying around
+                    scene.children.forEach(obj => {
+                        if (obj.userData.isBook) {
+                            obj.rotationSpeed = Math.random() * 0.02 + 0.005;
+                            obj.axis = new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize();
+                        }
+                    });
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_infinite_wall.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Purpose",
+                character: "XING",
+                text: "He jumps up from his seat as the book whimpers over to him, crying as the pages start falling out, turning into dust. As the book flipped over on its page to the center, a heart emerges from it. The author sheds a tear as he realizes the book he picked up. The author turned the book and opens it over his currently reading as his monitor screen glitches. He took the heart from the dead book and placed it on the book he was heading to support the newly ended soul reading the book. 'You're still needed, it’s not time yet…'",
+                action: () => {
+                    // Re-simulate book falling and heart interaction
+                    if (fallingBook) scene.remove(fallingBook);
+                    if (glowingHeart) scene.remove(glowingHeart);
+                    fallAndWeepBook(); // A new book falls
+                    setTimeout(() => {
+                        createGlowingHeart();
+                        if (xingSphere && glowingHeart) {
+                            new TWEEN.Tween(glowingHeart.position)
+                                .to({ y: xingSphere.position.y + 2, x: xingSphere.position.x + 1 }, 1500)
+                                .easing(TWEEN.Easing.Quadratic.Out)
+                                .start();
+                            }
+                        }, 1500);
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_purpose.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Rejection",
+                character: "XING",
+                text: "He grabs the heart gently as pulls it back. 'I said it’s not time yet!'",
+                action: () => {
+                    // Heart pulls back from Xing
+                    if (glowingHeart) {
+                        new TWEEN.Tween(glowingHeart.position)
+                            .to({ y: glowingHeart.position.y + 1, x: glowingHeart.position.x - 1 }, 1000)
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .start();
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_rejection.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Glitch",
+                character: "HEART",
+                text: "The heart turned black before turning back white as another monitor glitches.",
+                action: () => {
+                    // Heart changes color and monitor glitches
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x000000); // Black
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 500); // White
+                    }
+                    if (monitorPlane) {
+                        monitorPlane.material.color.setHex(0xFF00FF); // Purple glitch
+                        setTimeout(() => monitorPlane.material.color.setHex(0x000000), 100);
+                        setTimeout(() => monitorPlane.material.color.setHex(0xFF00FF), 200);
+                        setTimeout(() => monitorPlane.material.color.setHex(0x000000), 300);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_glitch.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Routine",
+                character: "Narrator Voice",
+                text: "In the story, we pan back to Xerx. He woke up in front of the mirror this time, brushing his teeth as his consciousness swaps back in. He looks around. He finished with getting dressed and took out a cigarette before lighting it up and turns his brain off, predicting his selected path he’ll take today.",
+                action: () => {
+                    hideAllObjects();
+                    createXerxMirrorScene(); // Re-use mirror scene
+                    camera.position.set(10, 5, 0);
+                    camera.lookAt(mirrorPlane.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_routine.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Memories",
+                character: "XERX",
+                text: "He downloads all the memories he held truly in his heart and kept them on a remote server for safe keeping.",
+                action: () => {
+                    // Show memory particles flowing into a server-like object
+                    hideAllObjects();
+                    createXerxMirrorScene(); // Keep Xerx
+                    createMemoryDownload();
+                    camera.position.set(10, 5, 5);
+                    camera.lookAt(xerxSphere.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_memories.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Problem",
+                character: "XING",
+                text: "This heart has a problem; it doesn’t like getting what it’s told to do.",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.rotation.y += 0.05; // Slight rotation to show defiance
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_problem.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Fascinating Theory",
+                character: "HEART",
+                text: "It realizes it can’t have this book as the readers were still reading and while he’s still writing, fascinating theory, said Doctor Acid Burn.",
+                action: () => {
+                    // Heart pulsates with thought
+                    if (glowingHeart) {
+                        glowingHeart.scale.set(1.2, 1.2, 1.2);
+                        new TWEEN.Tween(glowingHeart.scale)
+                            .to({ x: 1, y: 1, z: 1 }, 500)
+                            .easing(TWEEN.Easing.Elastic.Out)
+                            .yoyo(true)
+                            .repeat(1)
+                            .start();
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_theory.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Voice",
+                character: "XING",
+                text: "Woah, you can talk…",
+                action: () => { /* No specific 3D action, focus on dialogue */ },
+                llmFeature: false,
+                audioFile: 'audio/xing_wow_talk.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Explanation",
+                character: "HEART",
+                text: "Of course I can talk, idiot! I've been doing it this whole time, you just weren't listening! You gotta help out and take feedback. How would the devil wake up and feel everyday knowing it’s the devil?",
+                action: () => { /* No specific 3D action, focus on dialogue */ },
+                llmFeature: true, // Another LLM interaction point
+                llmPrompt: "The Heart is explaining its ability to talk and questioning how the 'devil' feels. What deeper philosophical or emotional insights does the Heart have about its own existence or the nature of perception and listening? Respond as the 'Heart'.",
+                audioFile: 'audio/heart_explanation.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Representation",
+                character: "XING",
+                text: "What if I represent him and there’s no devils here?",
+                action: () => { /* No specific 3D action, focus on dialogue */ },
+                llmFeature: false,
+                audioFile: 'audio/xing_representation.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Purpose (Continued)",
+                character: "HEART",
+                text: "Huh? Where’d he go? Anyways, you need help and that’s what I’m here to do.",
+                action: () => { /* No specific 3D action, focus on dialogue */ },
+                llmFeature: false,
+                audioFile: 'audio/heart_purpose_continued.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Blissful Kingdom",
+                character: "XERX",
+                text: "His time stopped for a moment as he notices the glitch before continuing on about his normal day in his normal, blissful kingdom.",
+                action: () => {
+                    hideAllObjects();
+                    createXerxMirrorScene(); // Back to Xerx's routine
+                    camera.position.set(10, 5, 0);
+                    camera.lookAt(mirrorPlane.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_blissful_kingdom.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Warning",
+                character: "XING",
+                text: "See, you keep spoiling it for everyone! You mis-put your heart in danger and hurt. You must always be happy.",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(glowingHeart.position);
+                    // Heart might slightly dim or recoil
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x808080); // Greyish
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_warning.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Dreamscape",
+                character: "Narrator Voice",
+                text: "The crash on the rocks woke up looking lost as the fishes swam by, a soft lullaby playing in the background. The shark swam by as well, the dogs bark in the dreamscape of the dreaming child before a halo appears over the thought as it absorbed the positive from the reader, falling in love with the book.",
+                action: () => {
+                    hideAllObjects();
+                    createDreamscapeScene(); // Abstract scene with water, fish, halo
+                    camera.position.set(0, 5, 10);
+                    camera.lookAt(0, 0, 0);
+                },
+                llmFeature: false,
+                audioFile: 'audio/dreamscape.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Blushing",
+                character: "HEART",
+                text: "I was blushing as it reads the book, also dreaming to be with the lion in the book, a place of belonging.",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0xFFC0CB); // Pink for blushing
+                        glowingHeart.scale.set(1.05, 1.05, 1.05); // Slight enlargement
+                    }
+                },
+                llmFeature: true, // Another LLM interaction point
+                llmPrompt: "The Heart is blushing while reading a book, dreaming of belonging with a lion. What are its deepest desires or fears related to this longing for belonging and the story it's reading? Respond as the 'Heart'.",
+                audioFile: 'audio/heart_blushing.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Naughty Book",
+                character: "XING",
+                text: "He takes the heart up like a baby as the heart faced the book trying to go back. 'He told you all that? Naughty book, stick your tongue out at the book!'",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    // Heart moves towards Xing's "arms"
+                    if (xingSphere && glowingHeart) {
+                        new TWEEN.Tween(glowingHeart.position)
+                            .to({ y: xingSphere.position.y + 1, x: xingSphere.position.x + 0.5 }, 1000)
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .start();
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/naughty_book.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Therapy Session",
+                character: "XERX",
+                text: "He snaps back a way before he wakes up in a therapy group session.",
+                action: () => {
+                    hideAllObjects();
+                    createTherapyGroupScene();
+                    camera.position.set(0, 5, 10);
+                    camera.lookAt(0, 0, 0);
+                },
+                llmFeature: false,
+                audioFile: 'audio/therapy_session.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Tantrum",
+                character: "HEART",
+                text: "It turned black again as if it got offended by the thought the reader had reading the book before knocking things over as if throwing a baby tantrum, reading that it’s being “Observed” (readers memories to life) but at what cost?",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x000000); // Black
+                        glowingHeart.position.y += 0.5; // Jump
+                        glowingHeart.rotation.z += 0.5; // Spin
+                        setTimeout(() => {
+                            glowingHeart.material.color.setHex(0xFFFFFF); // Back to white
+                            glowingHeart.position.y -= 0.5;
+                            glowingHeart.rotation.z = 0;
+                        }, 500);
+                    }
+                },
+                llmFeature: true, // Another LLM interaction point
+                llmPrompt: "The Heart is having a tantrum because it feels 'observed' and questions the cost of bringing readers' memories to life. What are the implications of this observation for the Heart, and what does it fear about its own existence as a narrative entity? Respond as the 'Heart'.",
+                audioFile: 'audio/heart_tantrum.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx Writing",
+                character: "XERX",
+                text: "He started writing… 'In the beginning-' that one is taken offense.",
+                action: () => {
+                    hideAllObjects();
+                    createXerxMirrorScene(); // Xerx at his desk
+                    camera.position.set(10, 5, 0);
+                    camera.lookAt(xerxSphere.position);
+                    // Simple animation of writing, perhaps a pen-like object moving
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_writing.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Who's 'The One'?",
+                character: "XING",
+                text: "Who’s “The One”?",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(xingSphere.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_the_one.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Frustration",
+                character: "XERX",
+                text: "WTF is wrong with you guys? Do you know how much work I have to do to fix your shit?",
+                action: () => {
+                    hideAllObjects();
+                    createXerxMirrorScene();
+                    camera.position.set(10, 5, 0);
+                    camera.lookAt(xerxSphere.position);
+                    if (xerxSphere) {
+                        xerxSphere.position.y += 0.1; // Slight "frustration" jump
+                        setTimeout(() => xerxSphere.position.y -= 0.1, 100);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_frustration.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Fear",
+                character: "HEART",
+                text: "It flashes purple as if it laughs at the thought and shakes its head. 'You can’t think that, that’s bad, they make me feel scared.'",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x800080); // Purple
+                        glowingHeart.scale.set(0.8, 0.8, 0.8); // Shrink slightly in fear
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 500);
+                        setTimeout(() => glowingHeart.scale.set(1, 1, 1), 500);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_fear.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Storytelling",
+                character: "XING",
+                text: "That’s what they’re stories. You can’t get too caught up in one story, you’ll get swept away from the storytelling. Look at Xerx, he’s helping writing his story just like how you are narrating this one. Maybe you’ll hear a call from God asking him why?",
+                action: () => {
+                    hideAllObjects();
+                    createBookWall(true); // Infinite books
+                    createXingAwakening();
+                    createXerxMirrorScene(); // Show both Xing and Xerx's worlds
+                    camera.position.set(5, 5, 20);
+                    camera.lookAt(0, 0, 0);
+                },
+                llmFeature: false,
+                audioFile: 'audio/storytelling.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Dark Omen",
+                character: "HEART",
+                text: "It turned black for a second as the purple started burning, representing a dark omen.",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x000000); // Black
+                        glowingHeart.material.emissive.setHex(0x800080); // Burning purple emissive
+                        setTimeout(() => {
+                            glowingHeart.material.color.setHex(0xFFFFFF);
+                            glowingHeart.material.emissive.setHex(0x000000);
+                        }, 1000);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/dark_omen.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Reader's Question",
+                character: "READER",
+                text: "Where is this story going?",
+                action: () => {
+                    // Scene becomes slightly chaotic or fades to grey
+                    scene.background = new THREE.Color(0x333333);
+                    scene.children.forEach(obj => {
+                        if (obj.material) obj.material.opacity = 0.5;
+                    });
+                },
+                llmFeature: false,
+                audioFile: 'audio/reader_question.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Back to It",
+                character: "XING",
+                text: "Sorry, the story usually does that. Back to it then.",
+                action: () => {
+                    // Scene returns to normal
+                    scene.background = new THREE.Color(0x1a1a2e);
+                    scene.children.forEach(obj => {
+                        if (obj.material) obj.material.opacity = 1;
+                    });
+                },
+                llmFeature: false,
+                audioFile: 'audio/back_to_it.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Special Abilities",
+                character: "XERX",
+                text: "You ever feel like you're special? Like you have special abilities to just know stuff?",
+                action: () => {
+                    hideAllObjects();
+                    createXerxMirrorScene();
+                    camera.position.set(10, 5, 0);
+                    camera.lookAt(xerxSphere.position);
+                    // Subtle glow around Xerx
+                    if (xerxSphere) {
+                        xerxSphere.material.emissive.setHex(0x00FFFF);
+                        xerxSphere.material.emissiveIntensity = 0.5;
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_special_abilities.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Truth",
+                character: "HEART",
+                text: "You need to stop lying to people.",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0xFF0000); // Red for truth/warning
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 500);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_truth.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Command",
+                character: "XING",
+                text: "You need to stop reading the book.",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(glowingHeart.position);
+                    // Book wall might appear to shrink or fade
+                    if (bookWallGroup) {
+                        bookWallGroup.scale.set(0.5, 0.5, 0.5);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_command.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Confusion",
+                character: "HEART",
+                text: "It looked at Xing confused as the pages stopped turning over to the world inside a book: a jester, Greg, Elon all lined up in order to get to the end of the castle. A soft flowing as the river passes through the path laid ahead. Only no one was present, no animals, no birds, only nature’s lullaby.",
+                action: () => {
+                    hideAllObjects();
+                    createHeartWorldScene(); // Abstract world inside a book
+                    camera.position.set(0, 10, 15);
+                    camera.lookAt(0, 0, 0);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x800080); // Purple for confusion
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_confusion.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Reflection",
+                character: "XING",
+                text: "It’s nice to do something nice for someone as you watch them drown. As if wasting your heart gets broken over and over again, you start to turn into someone else. The subtle whisper in the back of your head screaming red flag but you don’t listen. You press on, future, as if your immortal book can’t hurt you.",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(xingSphere.position);
+                    // Heart might show signs of distress, flickering color
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0xFF0000); // Red for pain
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 200);
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFF0000), 400);
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 600);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_reflection.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Purple Hue",
+                character: "HEART",
+                text: "It looks up at Xing with a confused color, turning purple.",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x800080); // Purple
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_purple_hue.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Dying Story",
+                character: "XERX",
+                text: "My dear, I’m about to tell you a story on why I’m dying… Imagine you found your old journal and read it, but the more you read, the more text appears that you have no recollection of writing them until you start to get visions and glimpses of distant or past memories we call deja vu. . .",
+                action: () => {
+                    hideAllObjects();
+                    createXerxMirrorScene();
+                    createMemoryDownload(); // Memories appearing
+                    camera.position.set(10, 5, 5);
+                    camera.lookAt(xerxSphere.position);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_dying_story.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Wisdom",
+                character: "XING",
+                text: "And that is why there’s both sides to a story, little one. He pats the heart’s head and gave it a warm smile. 'Now where should I put you? The bible is already taken-'",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(xingSphere.position);
+                    // Heart moves closer to Xing's "hand"
+                    if (xingSphere && glowingHeart) {
+                        new TWEEN.Tween(glowingHeart.position)
+                            .to({ y: xingSphere.position.y + 0.5, x: xingSphere.position.x + 0.2 }, 1000)
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .start();
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_wisdom.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Heart's Hue Change",
+                character: "HEART",
+                text: "It turned black before turning back to white, taking a grey hue.",
+                action: () => {
+                    hideAllObjects();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 5);
+                    camera.lookAt(glowingHeart.position);
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x000000); // Black
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 500); // White
+                        setTimeout(() => glowingHeart.material.color.setHex(0x808080), 1000); // Grey
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/heart_hue_change.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xing's Prediction",
+                character: "XING",
+                text: "Also gotta figure out why you change color. You're from year 2025, weather prediction just started getting better so my prediction is only semi accurate, do not quote me.",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(xingSphere.position);
+                    // Heart might subtly shift colors
+                    if (glowingHeart) {
+                        glowingHeart.material.color.setHex(0x00FF00); // Green for prediction
+                        setTimeout(() => glowingHeart.material.color.setHex(0xFFFFFF), 500);
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/xing_prediction.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Xerx's Metaverse",
+                character: "XERX",
+                text: "Now, every time we talk, we create a parallel timeline we call the metaverse. In here, there’s basically everything you need with all the time in the world, but it gets lonely. That nostalgic feeling you get when you start reminiscing about the past moments that never returned because I can’t share this. I can only teach those who follow me to hell. The eyes are the windows to the soul. I don’t know how many times you’ve heard that, but have you ever looked into someone's eyes and seen hell behind them, or the amount of sin you would create just by giving into that dark urge? But I’m here for the game of love, not falling into it.",
+                action: () => {
+                    hideAllObjects();
+                    createMetaverseScene();
+                    createXerxMirrorScene(); // Xerx is still present
+                    camera.position.set(0, 10, 20);
+                    camera.lookAt(0, 0, 0);
+                },
+                llmFeature: false,
+                audioFile: 'audio/xerx_metaverse.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "Finding Heart a Home",
+                character: "XING",
+                text: "Okay, dark lord, hand it over. Where were we? Right, finding Heart a new home. Where do you think he belongs? Let’s put him in your hands for now. What should his story be?",
+                action: () => {
+                    hideAllObjects();
+                    createXingAwakening();
+                    createGlowingHeart();
+                    camera.position.set(0, 0, 10);
+                    camera.lookAt(glowingHeart.position);
+                    // Heart floats gently in Xing's "hands"
+                    if (xingSphere && glowingHeart) {
+                        new TWEEN.Tween(glowingHeart.position)
+                            .to({ y: xingSphere.position.y + 0.5, x: xingSphere.position.x + 0.2 }, 1500)
+                            .easing(TWEEN.Easing.Quadratic.InOut)
+                            .yoyo(true)
+                            .repeat(Infinity)
+                            .start();
+                    }
+                },
+                llmFeature: false,
+                audioFile: 'audio/finding_heart_home.mp3' // REPLACE with your audio file path
+            },
+            {
+                name: "End",
+                character: "Narrator Voice",
+                text: "The story continues...",
+                action: () => {
+                    hideAllObjects();
+                    storyTextElement.textContent = "Thank you for watching! The story continues...";
+                    characterNameElement.textContent = "";
+                    nextButton.style.display = 'none';
+                    askHeartButton.style.display = 'none'; // Ensure LLM button is hidden at end
+                    muteButton.style.display = 'none'; // Hide mute button at end
+                    overlay.style.pointerEvents = 'none'; // Disable interaction
+                    overlay.style.opacity = 0; // Fade out overlay
+                    // Keep the last scene's objects visible for contemplation
+                },
+                llmFeature: false,
+                audioFile: 'audio/end_story.mp3' // REPLACE with your audio file path
+            }
+        ];
+
+        // TWEEN.js for smooth animations
+        const TWEEN = window.TWEEN || (function () {
+            var _tweens = [];
+
+            // Define Easing and Interpolation first as local variables
+            var Easing = {
+                Linear: {
+                    None: function (k) {
+                        return k;
+                    }
+                },
+                Quadratic: {
+                    In: function (k) { return k * k; },
+                    Out: function (k) { return k * (2 - k); },
+                    InOut: function (k) { if ((k *= 2) < 1) return 0.5 * k * k; return -0.5 * (--k * (k - 2) - 1); }
+                },
+                Cubic: {
+                    In: function (k) { return k * k * k; },
+                    Out: function (k) { return --k * k * k + 1; },
+                    InOut: function (k) { if ((k *= 2) < 1) return 0.5 * k * k * k; return 0.5 * ((k -= 2) * k * k + 2); }
+                },
+                Elastic: {
+                    In: function (k) { var s, a = 0.1, p = 0.4; if (k === 0) return 0; if (k === 1) return 1; if (!a || a < 1) { a = 1; s = p / 4; } else s = p / (2 * Math.PI) * Math.asin(1 / a); return -(a * Math.pow(2, 10 * (k -= 1)) * Math.sin((k - s) * (2 * Math.PI) / p)); },
+                    Out: function (k) { var s, a = 0.1, p = 0.4; if (k === 0) return 0; if (k === 1) return 1; if (!a || a < 1) { a = 1; s = p / 4; } else s = p / (2 * Math.PI) * Math.asin(1 / a); return (a * Math.pow(2, -10 * k) * Math.sin((k - s) * (2 * Math.PI) / p) + 1); },
+                    InOut: function (k) { var s, a = 0.1, p = 0.4; if (k === 0) return 0; if (k === 1) return 1; if (!a || a < 1) { a = 1; s = p / 4; } else s = p / (2 * Math.PI) * Math.asin(1 / a); if ((k *= 2) < 1) return -0.5 * (a * Math.pow(2, 10 * (k -= 1)) * Math.sin((k - s) * (2 * Math.PI) / p)); return a * Math.pow(2, -10 * (k -= 1)) * Math.sin((k - s) * (2 * Math.PI) / p) * 0.5 + 1; }
+                }
+            };
+
+            var Interpolation = {
+                Linear: function (v, k) {
+                    var m = v.length - 1, f = m * k, i = Math.floor(f), fn = Interpolation.Utils.Linear;
+                    if (k < 0) return fn(v[0], v[1], f);
+                    if (k > 1) return fn(v[m], v[m - 1], m - f);
+                    return fn(v[i], v[i + 1], f - i);
+                },
+                Utils: {
+                    Linear: function (p0, p1, t) {
+                        return (p1 - p0) * t + p0;
+                    }
+                }
+            };
+
+            var Tween = function (object) {
+                var _object = object;
+                var _valuesStart = {};
+                var _valuesEnd = {};
+                var _valuesStartRepeat = {};
+                var _duration = 1000;
+                var _easingFunction = Easing.Linear.None; // Correctly references local Easing
+                var _interpolationFunction = Interpolation.Linear; // Correctly references local Interpolation
+                var _startTime = 0;
+                var _delayTime = 0;
+                var _repeat = 0;
+                var _yoyo = false;
+                var _isPlaying = false;
+                var _reversed = false;
+                var _callbacks = {
+                    update: [],
+                    start: [],
+                    complete: [],
+                    stop: [],
+                    repeat: []
+                };
+                var _chainedTweens = [];
+
+                this.to = function (properties, duration) {
+                    if (duration !== undefined) _duration = duration;
+                    _valuesEnd = properties;
+                    return this;
+                };
+                this.start = function (time) {
+                    _tweens.push(this); // Use _tweens from the outer scope
+                    _isPlaying = true;
+                    _reversed = false;
+                    _startTime = time !== undefined ? time : performance.now(); // Use performance.now()
+                    _startTime += _delayTime;
+                    for (var property in _valuesEnd) {
+                        if (_object[property] === undefined) {
+                            continue;
+                        }
+                        _valuesStart[property] = _object[property];
+                        _valuesStartRepeat[property] = _valuesStart[property] || 0;
+                    }
+                    _callbacks.start.forEach(function (callback) {
+                        callback.call(_object);
+                    });
+                    return this;
+                };
+                this.stop = function () {
+                    if (!_isPlaying) return this;
+                    var i = _tweens.indexOf(this); // Use _tweens from the outer scope
+                    if (i !== -1) {
+                        _tweens.splice(i, 1);
+                    }
+                    _isPlaying = false;
+                    _callbacks.stop.forEach(function (callback) {
+                        callback.call(_object);
+                    });
+                    this.stopChainedTweens();
+                    return this;
+                };
+                this.delay = function (amount) {
+                    _delayTime = amount;
+                    return this;
+                };
+                this.easing = function (easingFunction) {
+                    _easingFunction = easingFunction;
+                    return this;
+                };
+                this.interpolation = function (interpolationFunction) {
+                    _interpolationFunction = interpolationFunction;
+                    return this;
+                };
+                this.repeat = function (times) {
+                    _repeat = times;
+                    return this;
+                };
+                this.yoyo = function (yoyo) {
+                    _yoyo = yoyo;
+                    return this;
+                };
+                this.onStart = function (callback) {
+                    _callbacks.start.push(callback);
+                    return this;
+                };
+                this.onUpdate = function (callback) {
+                    _callbacks.update.push(callback);
+                    return this;
+                };
+                this.onComplete = function (callback) {
+                    _callbacks.complete.push(callback);
+                    return this;
+                };
+                this.onStop = function (callback) {
+                    _callbacks.stop.push(callback);
+                    return this;
+                };
+                this.onRepeat = function (callback) {
+                    _callbacks.repeat.push(callback);
+                    return this;
+                };
+                this.update = function (time) {
+                    var property;
+                    if (time < _startTime) {
+                        return true;
+                    }
+                    if (time === undefined) {
+                        time = performance.now(); // Use performance.now()
+                    }
+                    var elapsed = (time - _startTime) / _duration;
+                    elapsed = elapsed > 1 ? 1 : elapsed;
+                    var value = _easingFunction(elapsed);
+                    for (property in _valuesEnd) {
+                        var start = _valuesStart[property] || 0;
+                        var end = _valuesEnd[property] || 0;
+                        if (end instanceof Array) {
+                            _object[property] = _interpolationFunction(end, value);
+                        } else {
+                            _object[property] = start + (end - start) * value;
+                        }
+                    }
+                    _callbacks.update.forEach(function (callback) {
+                        callback.call(_object, value);
+                    });
+                    if (elapsed === 1) {
+                        if (_repeat > 0) {
+                            if (isFinite(_repeat)) {
+                                _repeat--;
+                            }
+                            for (property in _valuesStartRepeat) {
+                                if (typeof _valuesEnd[property] === 'string') {
+                                    _valuesStartRepeat[property] = _valuesStartRepeat[property] + parseFloat(_valuesEnd[property]);
+                                }
+                                if (_yoyo) {
+                                    var tmp = _valuesStart[property];
+                                    _valuesStart[property] = _valuesEnd[property];
+                                    _valuesEnd[property] = tmp;
+                                }
+                                _valuesStart[property] = _valuesStartRepeat[property];
+                            }
+                            _startTime = time + _delayTime;
+                            _callbacks.repeat.forEach(function (callback) {
+                                callback.call(_object);
+                            });
+                            return true;
+                        } else {
+                            _callbacks.complete.forEach(function (callback) {
+                                callback.call(_object);
+                            });
+                            for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
+                                _chainedTweens[i].start(time);
+                            }
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+                this.chain = function () {
+                    _chainedTweens = arguments;
+                    return this;
+                };
+                this.stopChainedTweens = function () {
+                    for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {
+                        _chainedTweens[i].stop();
+                    }
+                };
+            };
+
+            var now = function () {
+                return performance.now();
+            };
+
+            return {
+                getAll: function () { return _tweens; },
+                removeAll: function () { _tweens = []; },
+                add: function (tween) { _tweens.push(tween); },
+                remove: function (tween) {
+                    var i = _tweens.indexOf(tween);
+                    if (i !== -1) {
+                        _tweens.splice(i, 1);
+                    }
+                },
+                update: function (time) {
+                    if (_tweens.length === 0) return false;
+                    var i = 0;
+                    while (i < _tweens.length) {
+                        if (_tweens[i].update(time)) {
+                            i++;
+                        } else {
+                            _tweens.splice(i, 1);
+                        }
+                    }
+                    return true;
+                },
+                Tween: Tween, // Expose Tween constructor
+                Easing: Easing, // Expose Easing
+                Interpolation: Interpolation, // Expose Interpolation
+                now: now // Expose now
+            };
+        })();
+
+        // --- Core THREE.js Functions ---
+
+        /**
+         * Initializes the THREE.js scene, camera, and renderer.
+         */
+        function init() {
+            // Assign DOM elements here to ensure they are defined when init is called
+            storyTextElement = document.getElementById('story-text');
+            characterNameElement = document.getElementById('character-name');
+            nextButton = document.getElementById('next-button');
+            askHeartButton = document.getElementById('ask-heart-button');
+            loadingSpinner = document.getElementById('loading-spinner');
+            loadingScreen = document.getElementById('loading-screen');
+            buttonContainer = document.getElementById('button-container');
+            muteButton = document.getElementById('mute-button'); // Get mute button
+
+            const canvas = document.getElementById('storyCanvas');
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e); // Dark background
+
+            // Camera (PerspectiveCamera for 3D depth)
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 10); // Initial camera position
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            // Lighting
+            ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft white light
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1); // White directional light
+            directionalLight.position.set(5, 10, 7.5).normalize();
+            scene.add(directionalLight);
+
+            // Event listeners for window resize and mouse interaction
+            window.addEventListener('resize', onWindowResize, false);
+            canvas.addEventListener('mousedown', onMouseDown, false);
+            canvas.addEventListener('mouseup', onMouseUp, false);
+            canvas.addEventListener('mousemove', onMouseMove, false);
+            canvas.addEventListener('touchstart', onTouchStart, false);
+            canvas.addEventListener('touchend', onTouchEnd, false);
+            canvas.addEventListener('touchmove', onTouchMove, false);
+
+            // Hide loading screen
+            loadingScreen.style.opacity = 0;
+            setTimeout(() => loadingScreen.style.display = 'none', 1000);
+
+            // Start the animation loop
+            animate();
+
+            // Add event listeners for buttons after they are assigned
+            nextButton.addEventListener('click', nextScene);
+            askHeartButton.addEventListener('click', getHeartLLMResponse);
+            muteButton.addEventListener('click', toggleMute); // Add mute button listener
+
+            // Set initial story text for the "Start Story" button
+            characterNameElement.textContent = "Welcome!";
+            storyTextElement.textContent = "Click 'Start Story' to begin your journey.";
+        }
+
+        /**
+         * Handles window resizing to maintain aspect ratio and canvas size.
+         */
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * Mouse down event handler for camera control.
+         * @param {MouseEvent} event - The mouse event.
+         */
+        function onMouseDown(event) {
+            isDragging = true;
+            previousMouseX = event.clientX;
+            previousMouseY = event.clientY;
+        }
+
+        /**
+         * Mouse up event handler for camera control.
+         */
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        /**
+         * Mouse move event handler for camera control.
+         * @param {MouseEvent} event - The mouse event.
+         */
+        function onMouseMove(event) {
+            if (!isDragging) return;
+
+            const deltaX = event.clientX - previousMouseX;
+            const deltaY = event.clientY - previousMouseY;
+
+            // Rotate camera around the scene's center
+            const target = new THREE.Vector3(0, 0, 0); // Point camera looks at
+            const currentPosition = camera.position.clone();
+            const up = camera.up.clone();
+
+            const quaternionX = new THREE.Quaternion().setFromAxisAngle(up, -deltaX * rotationSpeed);
+            currentPosition.applyQuaternion(quaternionX);
+            camera.position.copy(currentPosition);
+            camera.lookAt(target);
+
+            const right = new THREE.Vector3().crossVectors(camera.position, up).normalize();
+            const quaternionY = new THREE.Quaternion().setFromAxisAngle(right, deltaY * rotationSpeed);
+            currentPosition.applyQuaternion(quaternionY);
+            camera.position.copy(currentPosition);
+            camera.lookAt(target);
+
+            previousMouseX = event.touches[0].clientX;
+            previousMouseY = event.touches[0].clientY;
+        }
+
+        /**
+         * Touch start event handler for camera control.
+         * @param {TouchEvent} event - The touch event.
+         */
+        function onTouchStart(event) {
+            if (event.touches.length === 1) {
+                isDragging = true;
+                previousMouseX = event.touches[0].clientX;
+                previousMouseY = event.touches[0].clientY;
+            }
+        }
+
+        /**
+         * Touch end event handler for camera control.
+         */
+        function onTouchEnd() {
+            isDragging = false;
+        }
+
+        /**
+         * Touch move event handler for camera control.
+         * @param {TouchEvent} event - The touch event.
+         */
+        function onTouchMove(event) {
+            if (!isDragging || event.touches.length !== 1) return;
+
+            const deltaX = event.touches[0].clientX - previousMouseX;
+            const deltaY = event.touches[0].clientY - previousMouseY;
+
+            const target = new THREE.Vector3(0, 0, 0);
+            const currentPosition = camera.position.clone();
+            const up = camera.up.clone();
+
+            const quaternionX = new THREE.Quaternion().setFromAxisAngle(up, -deltaX * rotationSpeed);
+            currentPosition.applyQuaternion(quaternionX);
+            camera.position.copy(currentPosition);
+            camera.lookAt(target);
+
+            const right = new THREE.Vector3().crossVectors(camera.position, up).normalize();
+            const quaternionY = new THREE.Quaternion().setFromAxisAngle(right, deltaY * rotationSpeed);
+            currentPosition.applyQuaternion(quaternionY);
+            camera.position.copy(currentPosition);
+            camera.lookAt(target);
+
+            previousMouseX = event.touches[0].clientX;
+            previousMouseY = event.touches[0].clientY;
+        }
+
+        /**
+         * Main animation loop.
+         */
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+
+            // Update TWEEN animations
+            TWEEN.update();
+
+            // Update objects that have continuous animation
+            if (dreamParticles) {
+                dreamParticles.rotation.y += 0.001;
+            }
+            if (memoryParticles) {
+                memoryParticles.rotation.y += 0.005;
+                memoryParticles.position.y += Math.sin(performance.now() * 0.001) * 0.01;
+            }
+            if (glowingHeart && glowingHeart.userData.pulsating) {
+                const scale = 1 + Math.sin(performance.now() * 0.005) * 0.1;
+                glowingHeart.scale.set(scale, scale, scale);
+            }
+            if (bookWallGroup) {
+                bookWallGroup.children.forEach(book => {
+                    if (book.userData.isBook && book.rotationSpeed) {
+                        book.rotation.x += book.rotationSpeed * book.axis.x;
+                        book.rotation.y += book.rotationSpeed * book.axis.y;
+                        book.rotation.z += book.rotationSpeed * book.axis.z;
+                    }
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * Hides all objects in the scene, preparing for a new scene.
+         */
+        function hideAllObjects() {
+            scene.children.forEach(child => {
+                // Keep lights and camera
+                if (child !== ambientLight && child !== directionalLight && child !== camera) {
+                    scene.remove(child);
+                    // Dispose of geometry and material to free up memory
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                }
+            });
+            // Stop any ongoing tweens
+            TWEEN.removeAll();
+        }
+
+        // --- Scene Creation Functions ---
+
+        /**
+         * Creates a scene with abstract particles for dreams/imagination.
+         */
+        function createDreamParticles() {
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+            for (let i = 0; i < 1000; i++) {
+                const x = (Math.random() - 0.5) * 50;
+                const y = (Math.random() - 0.5) * 50;
+                const z = (Math.random() - 0.5) * 50;
+                vertices.push(x, y, z);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: 0x00ffff, // Cyan
+                size: 0.2,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true
+            });
+
+            dreamParticles = new THREE.Points(geometry, material);
+            scene.add(dreamParticles);
+        }
+
+        /**
+         * Creates Xing's awakening scene with a central sphere and drifting fragments.
+         */
+        function createXingAwakening() {
+            // Xing as a glowing sphere
+            const geometry = new THREE.SphereGeometry(1, 32, 32);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x00ff00, // Greenish glow
+                emissive: 0x00ff00,
+                emissiveIntensity: 0.5
+            });
+            xingSphere = new THREE.Mesh(geometry, material);
+            xingSphere.position.set(0, 0, 0);
+            scene.add(xingSphere);
+
+            // Fragments drifting
+            const fragmentGeometry = new THREE.BufferGeometry();
+            const fragmentVertices = [];
+            for (let i = 0; i < 200; i++) {
+                const x = (Math.random() - 0.5) * 10;
+                const y = (Math.random() - 0.5) * 10;
+                const z = (Math.random() - 0.5) * 10;
+                fragmentVertices.push(x, y, z);
+            }
+            fragmentGeometry.setAttribute('position', new THREE.Float32BufferAttribute(fragmentVertices, 3));
+            const fragmentMaterial = new THREE.PointsMaterial({
+                color: 0xaaaaaa, // Ash-like color
+                size: 0.1,
+                transparent: true,
+                opacity: 0.7
+            });
+            memoryParticles = new THREE.Points(fragmentGeometry, fragmentMaterial);
+            scene.add(memoryParticles);
+        }
+
+        /**
+         * Creates Xerx's mirror scene with a reflective plane and a monitor.
+         */
+        function createXerxMirrorScene() {
+            // Xerx as a sphere
+            const xerxGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const xerxMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 }); // Grey
+            xerxSphere = new THREE.Mesh(xerxGeometry, xerxMaterial);
+            xerxSphere.position.set(8, 0, 0);
+            scene.add(xerxSphere);
+
+            // Mirror plane (simple reflective plane)
+            const mirrorGeometry = new THREE.PlaneGeometry(5, 5);
+            const mirrorMaterial = new THREE.MeshPhongMaterial({
+                color: 0xcccccc,
+                specular: 0xffffff,
+                shininess: 100,
+                transparent: true,
+                opacity: 0.8
+            });
+            mirrorPlane = new THREE.Mesh(mirrorGeometry, mirrorMaterial);
+            mirrorPlane.position.set(8, 0, -3);
+            scene.add(mirrorPlane);
+
+            // Monitor plane (for glitch effect)
+            const monitorGeometry = new THREE.PlaneGeometry(6, 4);
+            monitorPlane = new THREE.Mesh(monitorGeometry, new THREE.MeshBasicMaterial({ color: 0x000000 }));
+            monitorPlane.position.set(8, 2, -5);
+            scene.add(monitorPlane);
+
+            // Cigarette (simple cylinder)
+            const cigaretteGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+            const cigaretteMaterial = new THREE.MeshPhongMaterial({ color: 0xffa07a }); // Light orange
+            cigaretteMesh = new THREE.Mesh(cigaretteGeometry, cigaretteMaterial);
+            cigaretteMesh.position.set(7.5, -0.5, 0);
+            cigaretteMesh.rotation.z = Math.PI / 2;
+            scene.add(cigaretteMesh);
+        }
+
+        /**
+         * Creates a wall of books, optionally infinite.
+         * @param {boolean} infinite - If true, creates a larger, more scattered wall.
+         */
+        function createBookWall(infinite = false) {
+            bookWallGroup = new THREE.Group();
+            const bookGeometry = new THREE.BoxGeometry(1, 1.5, 0.3);
+            const bookMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 }); // Brown
+
+            const numBooks = infinite ? 300 : 50;
+            const range = infinite ? 20 : 5;
+
+            for (let i = 0; i < numBooks; i++) {
+                const book = new THREE.Mesh(bookGeometry, bookMaterial.clone());
+                book.position.x = (Math.random() - 0.5) * range * 2;
+                book.position.y = (Math.random() - 0.5) * range * 2;
+                book.position.z = (Math.random() - 0.5) * range * 2;
+                book.rotation.x = Math.random() * Math.PI;
+                book.rotation.y = Math.random() * Math.PI;
+                book.userData.isBook = true; // Custom property for identification
+                bookWallGroup.add(book);
+            }
+            scene.add(bookWallGroup);
+        }
+
+        /**
+         * Simulates a book falling and disintegrating.
+         */
+        function fallAndWeepBook() {
+            if (bookWallGroup && bookWallGroup.children.length > 0) {
+                const bookIndex = Math.floor(Math.random() * bookWallGroup.children.length);
+                fallingBook = bookWallGroup.children[bookIndex];
+                if (fallingBook) {
+                    // Animate falling
+                    new TWEEN.Tween(fallingBook.position)
+                        .to({ y: -5 }, 2000)
+                        .easing(TWEEN.Easing.Quadratic.In)
+                        .onComplete(() => {
+                            // Disintegrate (turn into particles)
+                            const particlesGeometry = new THREE.BufferGeometry();
+                            const particlesVertices = [];
+                            for (let i = 0; i < 100; i++) {
+                                const x = fallingBook.position.x + (Math.random() - 0.5) * 2;
+                                const y = fallingBook.position.y + (Math.random() - 0.5) * 2;
+                                const z = fallingBook.position.z + (Math.random() - 0.5) * 2;
+                                particlesVertices.push(x, y, z);
+                            }
+                            particlesGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlesVertices, 3));
+                            const particlesMaterial = new THREE.PointsMaterial({
+                                color: 0xdeb887, // BurlyWood for dust
+                                size: 0.1,
+                                transparent: true,
+                                opacity: 0.8
+                            });
+                            const dustParticles = new THREE.Points(particlesGeometry, particlesMaterial);
+                            scene.add(dustParticles);
+
+                            new TWEEN.Tween(dustParticles.material)
+                                .to({ opacity: 0 }, 1500)
+                                .onComplete(() => scene.remove(dustParticles))
+                                .start();
+
+                            bookWallGroup.remove(fallingBook);
+                            fallingBook = null; // Clear reference
+                        })
+                        .start();
+                }
+            }
+        }
+
+        /**
+         * Creates a glowing heart object.
+         */
+        function createGlowingHeart() {
+            // A simple sphere for the heart, could be replaced with a custom shape
+            const heartGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const heartMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff0000, // Red
+                emissive: 0xff0000,
+                emissiveIntensity: 0.8
+            });
+            glowingHeart = new THREE.Mesh(heartGeometry, heartMaterial);
+            glowingHeart.position.set(0, -2, 0); // Start below Xing
+            glowingHeart.userData.pulsating = true; // Custom property for animation
+            scene.add(glowingHeart);
+
+            // Initial pulsation
+            new TWEEN.Tween(glowingHeart.scale)
+                .to({ x: 1.1, y: 1.1, z: 1.1 }, 500)
+                .easing(TWEEN.Easing.Quadratic.Out)
+                .yoyo(true)
+                .repeat(Infinity)
+                .start();
+        }
+
+        /**
+         * Creates Xerx's new house scene with multiple monitors.
+         */
+        function createXerxNewHouseScene() {
+            // Xerx
+            const xerxGeometry = new THREE.SphereGeometry(1, 32, 32);
+            const xerxMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+            xerxSphere = new THREE.Mesh(xerxGeometry, xerxMaterial);
+            xerxSphere.position.set(0, 0, 0);
+            scene.add(xerxSphere);
+
+            // Multiple monitors
+            const monitorGeometry = new THREE.BoxGeometry(4, 3, 0.5);
+            const monitorMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            for (let i = 0; i < 5; i++) {
+                const monitor = new THREE.Mesh(monitorGeometry, monitorMaterial.clone());
+                monitor.position.set(
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 5 + 2,
+                    (Math.random() - 0.5) * 10 - 5
+                );
+                monitor.rotation.y = Math.random() * Math.PI * 2;
+                scene.add(monitor);
+            }
+        }
+
+        /**
+         * Creates a scene representing memory download.
+         */
+        function createMemoryDownload() {
+            // Server-like object
+            const serverGeometry = new THREE.BoxGeometry(2, 4, 1);
+            const serverMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const server = new THREE.Mesh(serverGeometry, serverMaterial);
+            server.position.set(10, 0, 3);
+            scene.add(server);
+
+            // Particles flowing into the server
+            const particleCount = 500;
+            const particles = new THREE.BufferGeometry();
+            const pMaterial = new THREE.PointsMaterial({
+                color: 0x00ff00,
+                size: 0.1,
+                transparent: true,
+                blending: THREE.AdditiveBlending
+            });
+
+            const pVertices = [];
+            for (let i = 0; i < particleCount; i++) {
+                const x = (Math.random() - 0.5) * 10 + 5;
+                const y = (Math.random() - 0.5) * 10;
+                const z = (Math.random() - 0.5) * 10;
+                pVertices.push(x, y, z);
+            }
+            particles.setAttribute('position', new THREE.Float32BufferAttribute(pVertices, 3));
+            memoryParticles = new THREE.Points(particles, pMaterial);
+            scene.add(memoryParticles); // Corrected from memoryToParticles
+
+            // Animate particles towards the server
+            memoryParticles.userData.target = server.position;
+            memoryParticles.userData.speed = 0.05;
+        }
+
+        /**
+         * Creates a therapy group session scene.
+         */
+        function createTherapyGroupScene() {
+            // Central figure (therapist or group leader)
+            const centerSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(1, 16, 16),
+                new THREE.MeshPhongMaterial({ color: 0x6a5acd }) // Slate blue
+            );
+            centerSphere.position.set(0, 0, 0);
+            scene.add(centerSphere);
+
+            // Other group members (smaller spheres)
+            therapyGroupSpheres = new THREE.Group();
+            const numMembers = 7;
+            const radius = 5;
+            for (let i = 0; i < numMembers; i++) {
+                const angle = (i / numMembers) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                const member = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.7, 16, 16),
+                    new THREE.MeshPhongMaterial({ color: 0x9370db }) // Medium purple
+                );
+                member.position.set(x, 0, z);
+                therapyGroupSpheres.add(member);
+            }
+            scene.add(therapyGroupSpheres);
+        }
+
+        /**
+         * Creates an abstract dreamscape scene with water, fish, and a halo.
+         */
+        function createDreamscapeScene() {
+            // Water plane
+            const waterGeometry = new THREE.PlaneGeometry(50, 50);
+            const waterMaterial = new THREE.MeshPhongMaterial({
+                color: 0x0000ff,
+                transparent: true,
+                opacity: 0.6
+            });
+            const water = new THREE.Mesh(waterGeometry, waterMaterial);
+            water.rotation.x = -Math.PI / 2;
+            water.position.y = -5;
+            scene.add(water);
+
+            // Simple fish (cones)
+            const fishGeometry = new THREE.ConeGeometry(0.5, 1, 8);
+            const fishMaterial = new THREE.MeshPhongMaterial({ color: 0xffa500 }); // Orange
+            for (let i = 0; i < 10; i++) {
+                const fish = new THREE.Mesh(fishGeometry, fishMaterial.clone());
+                fish.position.set(
+                    (Math.random() - 0.5) * 20,
+                    (Math.random() - 0.5) * 3 - 5,
+                    (Math.random() - 0.5) * 20
+                );
+                fish.rotation.y = Math.random() * Math.PI * 2;
+                scene.add(fish);
+            }
+
+            // Halo (glowing ring)
+            const haloGeometry = new THREE.RingGeometry(2, 2.5, 32);
+            const haloMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffff00, // Yellow
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
+            const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+            halo.rotation.x = Math.PI / 2;
+            halo.position.y = 5;
+            scene.add(halo);
+        }
+
+        /**
+         * Creates an abstract scene representing the "world inside a book" (Heart's confusion).
+         */
+        function createHeartWorldScene() {
+            // Jester, Greg, Elon as simple shapes
+            const jester = new THREE.Mesh(new THREE.ConeGeometry(1, 2, 8), new THREE.MeshPhongMaterial({ color: 0xff00ff }));
+            jester.position.set(-5, 0, 0);
+            scene.add(jester);
+
+            const greg = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshPhongMaterial({ color: 0x00ff00 }));
+            greg.position.set(0, 0, 0);
+            scene.add(greg);
+
+            const elon = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 2, 16), new THREE.MeshPhongMaterial({ color: 0x00ffff }));
+            elon.position.set(5, 0, 0);
+            scene.add(elon);
+
+            // River (plane)
+            const riverGeometry = new THREE.PlaneGeometry(20, 5);
+            const riverMaterial = new THREE.MeshPhongMaterial({ color: 0x000080 }); // Dark blue
+            const river = new THREE.Mesh(riverGeometry, riverMaterial);
+            river.rotation.x = -Math.PI / 2;
+            river.position.y = -1;
+            river.position.z = 2;
+            scene.add(river);
+
+            // Simple trees/nature (cones)
+            const treeGeometry = new THREE.ConeGeometry(0.5, 2, 8);
+            const treeMaterial = new THREE.MeshPhongMaterial({ color: 0x228b22 }); // Forest green
+            for (let i = 0; i < 10; i++) {
+                const tree = new THREE.Mesh(treeGeometry, treeMaterial.clone());
+                tree.position.set(
+                    (Math.random() - 0.5) * 15,
+                    -0.5,
+                    (Math.random() - 0.5) * 10 - 5
+                );
+                scene.add(tree);
+            }
+        }
+
+        /**
+         * Creates a scene representing the metaverse with parallel timelines.
+         */
+        function createMetaverseScene() {
+            metaversePlanes = new THREE.Group();
+            const planeGeometry = new THREE.PlaneGeometry(20, 20);
+            const planeMaterial = new THREE.MeshBasicMaterial({
+                color: 0x800080, // Purple
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.1
+            });
+
+            for (let i = 0; i < 5; i++) {
+                const plane = new THREE.Mesh(planeGeometry, planeMaterial.clone());
+                plane.position.z = (i - 2) * 5; // Stack planes along Z-axis
+                plane.rotation.y = Math.random() * Math.PI * 2; // Random rotation
+                metaversePlanes.add(plane);
+            }
+            scene.add(metaversePlanes);
+
+            // Animate planes shifting
+            new TWEEN.Tween(metaversePlanes.rotation)
+                .to({ y: Math.PI * 2 }, 10000)
+                .easing(TWEEN.Easing.Linear.None)
+                .repeat(Infinity)
+                .start();
+        }
+
+        // --- Story Progression and UI ---
+
+        /**
+         * Plays audio for the current scene.
+         * @param {string} audioFile - The path to the audio file.
+         */
+        function playSceneAudio(audioFile) {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            if (audioFile && !isMuted) {
+                currentAudio = new Audio(audioFile);
+                currentAudio.play().catch(e => {
+                    console.error("Error playing audio:", e);
+                    // Provide a clear message if the audio file cannot be loaded
+                    if (e.name === 'NotSupportedError' || e.message.includes('supported source')) {
+                        console.warn(`AUDIO PLAYBACK ERROR: The audio file "${audioFile}" could not be loaded or is not supported. Please ensure the file exists at the specified path and is a common format (e.g., MP3, WAV).`);
+                    }
+                });
+            } else {
+                currentAudio = null;
+            }
+        }
+
+        /**
+         * Toggles mute state for audio.
+         */
+        function toggleMute() {
+            isMuted = !isMuted;
+            muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
+            if (currentAudio) {
+                currentAudio.muted = isMuted;
+            }
+        }
+
+        /**
+         * Displays the current story text and character.
+         * @param {number} index - The index of the current story scene.
+         */
+        function displayStoryText(index) {
+            clearTimeout(textUpdateTimeout); // Clear any previous timeouts
+            const sceneData = storyScenes[index];
+            characterNameElement.textContent = sceneData.character;
+            storyTextElement.textContent = sceneData.text;
+
+            // Execute the 3D action for the current scene
+            if (sceneData.action) {
+                sceneData.action();
+            }
+
+            // Play audio for the current scene
+            playSceneAudio(sceneData.audioFile);
+
+            // Show/hide LLM button based on scene data
+            if (sceneData.llmFeature && !isLLMResponseActive) {
+                askHeartButton.style.display = 'inline-block';
+            } else {
+                askHeartButton.style.display = 'none';
+            }
+
+            // Fade in the text overlay
+            overlay.style.opacity = 1;
+        }
+
+        /**
+         * Proceeds to the next story scene.
+         */
+        function nextScene() {
+            // If an LLM response was active, reset the flag and re-display the original scene text
+            if (isLLMResponseActive) {
+                isLLMResponseActive = false;
+                displayStoryText(currentSceneIndex); // Re-display original text for current scene
+                askHeartButton.style.display = storyScenes[currentSceneIndex].llmFeature ? 'inline-block' : 'none'; // Show LLM button if applicable
+                return; // Do not advance currentSceneIndex yet
+            }
+
+            // Change button text from "Start Story" to "Next Story" after the first click
+            if (nextButton.textContent === "Start Story") {
+                nextButton.textContent = "Next Story";
+            }
+
+            currentSceneIndex++;
+            if (currentSceneIndex < storyScenes.length) {
+                displayStoryText(currentSceneIndex);
+            } else {
+                // End of story
+                displayStoryText(storyScenes.length - 1); // Display the "End" scene
+                cancelAnimationFrame(animationFrameId); // Stop the animation loop
+                // Clean up all objects at the very end
+                hideAllObjects();
+            }
+        }
+
+        /**
+         * Calls the Gemini API to get a dynamic response from the Heart.
+         */
+        async function getHeartLLMResponse() {
+            const currentScene = storyScenes[currentSceneIndex];
+            if (!currentScene || !currentScene.llmFeature || !currentScene.llmPrompt) {
+                console.warn("LLM feature not available or no prompt for this scene.");
+                return;
+            }
+
+            askHeartButton.disabled = true;
+            nextButton.disabled = true;
+            loadingSpinner.style.display = 'inline-block';
+            storyTextElement.textContent = "The Heart is pondering... (Generating thoughts...)";
+            characterNameElement.textContent = "HEART (AI)";
+
+            // Stop current audio before playing LLM response (if any)
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+
+            const prompt = currentScene.llmPrompt;
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // If you want to use models other than gemini-2.0-flash or imagen-3.0-generate-002, provide an API key here. Otherwise, leave this as-is.
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    storyTextElement.textContent = text;
+                    isLLMResponseActive = true; // Set flag that LLM response is active
+                } else {
+                    storyTextElement.textContent = "The Heart feels a blank... (No response from AI)";
+                    console.error("LLM response structure unexpected:", result);
+                }
+            } catch (error) {
+                storyTextElement.textContent = "The Heart is silent... (Error communicating with AI)";
+                console.error("Error calling LLM:", error);
+            } finally {
+                askHeartButton.style.display = 'none'; // Hide LLM button after use
+                askHeartButton.disabled = false;
+                nextButton.disabled = false;
+                loadingSpinner.style.display = 'none';
+            }
+        }
+
+        // Initialize THREE.js when the window loads
+        window.onload = function () {
+            init();
+            // The initial display of text and audio will now be handled by the first click on "Start Story"
+        };
+    </script>
+</body>
+</html>
