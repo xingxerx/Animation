@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Dream Weaver's Heart</title>
+    <!-- Load Tailwind CSS from CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter for a clean, modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Apply Inter font globally and set a subtle background */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8, #d9e2ec); /* Soft gradient background */
+            min-height: 100vh; /* Ensure body takes full viewport height */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem; /* Add some padding around the content */
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+        }
+
+        /* Custom scrollbar for better aesthetics */
+        .story-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .story-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .story-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        .story-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Simple animation for the background elements to simulate a dream-like state */
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+            50% { transform: translateY(-20px) rotate(5deg); opacity: 0.9; }
+            100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+        }
+
+        .floating-element {
+            position: absolute;
+            animation: float 10s ease-in-out infinite;
+            opacity: 0.7;
+            border-radius: 50%; /* Make elements circular */
+            filter: blur(5px); /* Soft blur for dream effect */
+            z-index: -1; /* Place behind content */
+        }
+
+        .floating-element:nth-child(1) {
+            top: 10%; left: 5%; width: 60px; height: 60px; background-color: #a78bfa; /* Purple */
+            animation-delay: 0s;
+        }
+        .floating-element:nth-child(2) {
+            top: 30%; right: 10%; width: 80px; height: 80px; background-color: #60a5fa; /* Blue */
+            animation-delay: 2s;
+        }
+        .floating-element:nth-child(3) {
+            bottom: 20%; left: 15%; width: 70px; height: 70px; background-color: #fca5a5; /* Red */
+            animation-delay: 4s;
+        }
+        .floating-element:nth-child(4) {
+            top: 50%; left: 25%; width: 50px; height: 50px; background-color: #34d399; /* Green */
+            animation-delay: 6s;
+        }
+        .floating-element:nth-child(5) {
+            bottom: 5%; right: 20%; width: 90px; height: 90px; background-color: #fcd34d; /* Yellow */
+            animation-delay: 8s;
+        }
+
+        /* Fade effect for chapter transitions */
+        .chapter-fade-in {
+            animation: chapterFadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes chapterFadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Modal specific styles (kept for potential future use or debugging, but hidden) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* shadow-2xl */
+            max-width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <!-- Floating elements for dream-like background effect -->
+    <div class="floating-element"></div>
+    <div class="floating-element"></div>
+    <div class="floating-element"></div>
+    <div class="floating-element"></div>
+    <div class="floating-element"></div>
+
+    <!-- Main container for the story content -->
+    <div id="app" class="relative bg-white p-8 rounded-xl shadow-2xl max-w-4xl w-full mx-auto my-8 flex flex-col items-center border border-gray-200">
+        <!-- Title of the story -->
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-2 text-center leading-tight">
+            The Dream Weaver's Heart
+        </h1>
+        <!-- Author Name -->
+        <p class="text-lg text-gray-700 mb-6 text-center">by XingXerx</p>
+        <!-- Subtitle or brief introduction -->
+        <p class="text-lg text-gray-600 mb-8 text-center max-w-2xl">
+            A story where boredom births imagination—a dream given voice.
+        </p>
+
+        <!-- Story content container, initially hidden -->
+        <div id="storyContent" class="mt-10 w-full max-h-[70vh] overflow-y-auto story-container p-4 md:p-6 bg-gray-50 rounded-lg border border-gray-100 shadow-inner">
+            <!-- Chapters will be dynamically loaded here from Firestore -->
+            <div id="loadingChapters" class="flex flex-col items-center justify-center h-full text-gray-600">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4"></div>
+                <p>Loading chapters...</p>
+            </div>
+        </div>
+
+        <!-- Navigation Controls -->
+        <div class="flex flex-col md:flex-row justify-between items-center w-full mt-8 pt-4 border-t border-gray-200 gap-4">
+            <button id="prevChapterButton" class="bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-full shadow-md hover:bg-gray-400 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                Previous Chapter
+            </button>
+            <div class="flex flex-col items-center">
+                <span id="chapterIndicator" class="text-lg font-medium text-gray-700 mb-2">Chapter 1 of 13</span>
+                <select id="chapterSelect" class="bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+            </div>
+            <button id="nextChapterButton" class="bg-gradient-to-r from-blue-500 to-teal-600 text-white font-semibold py-2 px-4 rounded-full shadow-lg hover:from-blue-600 hover:to-teal-700 transition-all duration-300">
+                Next Chapter
+            </button>
+        </div>
+
+        <!-- Text-to-Speech Controls -->
+        <div class="flex flex-col items-center gap-4 mt-4 w-full">
+            <div class="flex justify-center gap-4 w-full">
+                <button id="readChapterButton" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold py-2 px-4 rounded-full shadow-md hover:from-green-600 hover:to-emerald-700 transition-all duration-300" disabled>
+                    Read Chapter
+                </button>
+                <button id="pauseSpeechButton" class="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-full shadow-md hover:bg-yellow-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Pause
+                </button>
+                <button id="stopSpeechButton" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-full shadow-md hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Stop
+                </button>
+            </div>
+
+            <!-- Voice Changer Controls -->
+            <div class="flex flex-col md:flex-row items-center gap-4 mt-4 w-full max-w-md">
+                <div class="flex flex-col items-center w-full">
+                    <label for="voiceSelect" class="text-gray-700 text-sm font-medium mb-1">Voice:</label>
+                    <select id="voiceSelect" class="bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 w-full">
+                        <!-- Voices will be populated by JavaScript -->
+                    </select>
+                </div>
+                <div class="flex flex-col items-center w-full">
+                    <label for="pitchSlider" class="text-gray-700 text-sm font-medium mb-1">Pitch: <span id="pitchValue">1.0</span></label>
+                    <input type="range" id="pitchSlider" min="0" max="2" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div class="flex flex-col items-center w-full">
+                    <label for="rateSlider" class="text-gray-700 text-sm font-medium mb-1">Rate: <span id="rateValue">1.0</span></label>
+                    <input type="range" id="rateSlider" min="0.1" max="10" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+        </div>
+        <!-- No "Improve Text" button here anymore -->
+    </div>
+
+    <!-- AI Text Improvement Modal Structure (Removed, as improvement is now in background) -->
+    <!-- <div id="improveTextModalOverlay" class="modal-overlay hidden"> ... </div> -->
+
+    <!-- Firebase SDKs and Application Logic -->
+    <script type="module">
+        // Log the raw __api_key value at the very beginning for debugging
+        console.log("Raw __api_key from environment:", typeof __api_key !== 'undefined' ? __api_key : 'undefined');
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, orderBy, getDocs, addDoc, setDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // Explicitly get the API key if provided by the environment
+        const geminiApiKey = "AIzaSyAmr46K-bRZL84X__QYUjcUGzVS6LQr0s4"; // Use __api_key if available
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let chaptersData = []; // Array to hold chapter objects fetched from Firestore
+        let currentChapterIndex = 0;
+        let userId = null; // Will store the authenticated user's ID
+        let userSettingsDocRef = null; // Reference to the user's settings document
+
+        const synth = window.speechSynthesis;
+        let currentUtterance = null;
+        let selectedVoice = null;
+        let currentPitch = 1.0;
+        let currentRate = 1.0;
+        let isSpeechActive = false; // New flag to track speech state
+
+        // DOM Elements
+        const storyContent = document.getElementById('storyContent');
+        const loadingChaptersDiv = document.getElementById('loadingChapters');
+        const prevChapterButton = document.getElementById('prevChapterButton');
+        const nextChapterButton = document.getElementById('nextChapterButton');
+        const chapterIndicator = document.getElementById('chapterIndicator');
+        const chapterSelect = document.getElementById('chapterSelect');
+        const readChapterButton = document.getElementById('readChapterButton');
+        const pauseSpeechButton = document.getElementById('pauseSpeechButton');
+        const stopSpeechButton = document.getElementById('stopSpeechButton');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const pitchSlider = document.getElementById('pitchSlider');
+        const pitchValueSpan = document.getElementById('pitchValue');
+        const rateSlider = document.getElementById('rateSlider');
+        const rateValueSpan = document.getElementById('rateValue');
+
+        // Initial Chapters Data (to be seeded if Firestore is empty)
+        // This data will be uploaded to Firestore if the collection is empty.
+        const initialChapters = [
+            {
+                chapterNumber: 1,
+                title: "Chapter 1 – The Dream Begins",
+                content: `
+                    <h3 class="text-xl font-medium text-gray-600 mb-2">NARRATOR VOICE / PROLOGUE TONE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-2">"What is a story?"</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A story is where boredom births imagination—a dream given voice.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A space where worlds bloom from whispers, and reality flickers like candlelight.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">But sometimes, the dream doesn’t stay in the dream.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">It follows you, becomes a thought, then a memory.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A promise.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A danger.</p>
+                    <p class="text-gray-800 leading-relaxed">A love letter waiting to be opened, its ink still wet with longing.</p>
+                `
+            },
+            {
+                chapterNumber: 2,
+                title: "Chapter 2 – Awakening of Xing",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[Darkness. Then light. Then thought.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-2">(internal monologue, a whisper of confusion)</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">Where... am I?</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">Fragments drift into his mind like ash from a forgotten fire:</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A brother.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A name: Xerx.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">A book with a rose-shaped cover, a single petal forever falling, eternally suspended between life and dust.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">The word "Author"... but was he the writer, or merely a written thought, a character in a grander narrative?</p>
+                    <p class="text-gray-800 leading-relaxed">He opens his eyes. The haze in his head lifts, revealing not a room, but an infinite library. Walls stretch endlessly, adorned with countless volumes, some glowing faintly, others dark and forgotten. Magic books, imbued with unseen energy, drift and dance around him, offering whispers of ideas, sparks of inspiration. He feels a strange duality – the reader and the written, the creator and the created.</p>
+                `
+            },
+            {
+                chapterNumber: 3,
+                title: "Chapter 3 – Xerx’s Mirror",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[Elsewhere. A sterile bathroom. The harsh gleam of a mirror. The faint scent of smoke. A subtle, almost imperceptible glitch in the air.]</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">Xerx brushes his teeth, his movements precise, almost mechanical. He stares into his own eyes—and for a fleeting, chilling moment, sees someone else's reflection staring back. A flicker of recognition, then it's gone.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">He finishes, takes out a cigarette, and lights it with a practiced hand. The smoke curls, a temporary veil against the world. He breathes, exhales, and with each puff, a part of his mind seems to disengage, predicting the pre-ordained path of his day.</p>
+                    <p class="text-gray-800 leading-relaxed">Behind him, a monitor flickers, displaying lines of code. A subtle glitch ripples across the screen, a fleeting distortion in the digital fabric. He doesn’t question it. Not anymore. His memories, the ones he truly cherishes, are silently uploading, not to his mind, but to a hidden, remote server, a fortress for his heart's true treasures.</p>
+                `
+            },
+            {
+                chapterNumber: 4,
+                title: "Chapter 4 – The Heart Appears",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[Back with Xing. The infinite wall of stories. A soft, mournful sound.]</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">One book, distinct from the swirling multitude, shudders. It falls from the infinite wall, landing softly on the floor. It weeps—not with tears, but with pages, shedding them like decaying leaves, each turning to dust as it detaches. The rose-shaped cover, once vibrant, now looks withered, its single petal finally falling, disintegrating into nothingness.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">As the last page dissolves, the book lies open, its center empty. Then, from the void, a pulsating, glowing heart emerges, radiating a soft, warm light.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(softly, a profound realization)<br>You're not done yet…</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">He jumps from his seat, drawn by an invisible force. The dying book, still whimpering, seems to reach out. He sheds a tear, an author mourning a lost narrative. Gently, reverently, he lifts the glowing heart. His monitor screen glitches, mirroring the book's distress. He turns the heart, placing it carefully onto the pages of the book he was currently reading, a new vessel for a newly ended soul.</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">The book he holds embraces the heart. Its pages, once still, begin to flutter, chapters flipping through the heart's light. The heart itself seems to smile, reading the book being written before jumping in the book.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(grabbing the heart gently as he pulls it back)<br>I said it’s not time yet!</p>
+                    <p class="text-gray-800 leading-relaxed mb-2">The heart turned black before turning back white as another monitor glitches.</p>
+                    <p class="text-gray-600 italic mb-2">In the story we pan back to Xerx. He woke up in front of the mirror this time, brushing his teeth as his consciousness swapped back in. He looks around, finished with getting dressed, and took out a cigarette before lighting it up and turns his brain off, predicting his selected path he’ll take today.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">He downloads all the memories he held truly in his heart and kept them on a remote server for safe keeping.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">This heart has a problem. It doesn’t like getting what it’s told to do.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">It realizes it can’t have this book as the readers were still reading and while he’s still writing, fascinate theory said doctor acid burn.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Woah, you can talk…</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Of course I can talk, idiot! I’ve been doing it this whole time, you just weren’t listening. You gotta help out and take feedback! How would the devil wake up and feel everyday knowing it’s the devil?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">What if I represent him and there’s no devils here?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Huh? Where’d he go? Anyways, you need help and that’s what I’m here to do.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">(His time stopped for a moment as he notices the glitch before continuing on about his normal day in his normal, blissful kingdom.)</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">See, you keep spoiling it for everyone! You misplace your heart in danger and hurt. You must always be happy.</p>
+                    <p class="text-gray-600 italic mb-2">The crash on the rocks woke up, looking lost, as the fishes swam by, a soft lullaby playing in the background.</p>
+                    <p class="text-gray-600 italic mb-2">The shark swam by as well, the dogs bark in the dreamscape of the dreaming child before a halo appears over the thought as it absorbed the positive from the reader falling in love with the book.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">I was blushing as it reads the book, also dreaming to be with the lion in the book, a place of belonging.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(He takes the heart up like a baby as the heart faced the book, trying to go back.)<br>He told you all that? Naughty book, stick your tongue out at the book.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(He snaps back a way before he wakes up in a therapy group session.)</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">It turned black again as if it got offended by the thought the reader had reading the book, before knocking things over as if throwing a baby tantrum, reading that it’s being “Observed” (readers memories to life) but at what cost?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">He started writing… In the beginning— that one is taken offense.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Who’s “The One”?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">WTF is wrong with you guys? Do you know how much work I have to do to fix your shit?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">It flashes purple as if it laughs at the thought and shakes its head. You can’t think that, that’s bad, they make me feel scared.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">That’s what they’re stories, you can’t get too caught up in one story, you’ll get swept away from the storytelling. Look at Xerx, he’s helping write his story just like how you are narrating this one, maybe you’ll hear a call from God asking him why?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">It turned black for a second as the purple started burning, representing a dark omen.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">READER</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Where is this story going?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Sorry, the story usually does that, back to it then.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">You ever feel like you’re special? Like you have special abilities to just know stuff?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">You need to stop lying to people.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">You need to stop reading the book.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(It looked at Xing, confused, as the pages stopped turning over to the world inside a book: a jester, Greg, Elon, all lined up in order to get to the end of the castle. A soft flowing as the river passes through the path laid ahead, only no one was present, no animals, no birds, only nature’s lullaby.)</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">It’s nice to do something nice for someone as you watch them drown. As if wasting your heart gets broken over and over again, you start to turn into someone else. The subtle whisper in the back of your head screaming red flag, but you don’t listen. You press on, future, as if your immortal book can’t hurt you.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(It looks up at Xing with a confused color turning purple.)</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">My dear, I’m about to tell you a story on why I’m dying… Imagine you found your old journal and read it. But the more you read, the more text appears that you have no recollection of writing. Until you start to get visions and glimpses of distant or past memories. We call it déjà vu…</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">And that is why there are both sides to a story, little one. (He pats the heart’s head and gave it a warm smile.) Now where should I put you? The Bible is already taken—</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">It turned black before turning back to white, taking a grey hue.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Also gotta figure out why you change color. You’re from year 2025, weather prediction just started getting better so my prediction is only semi accurate, do not quote me.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Now, every time we talk, we create a parallel timeline. We call it the Metaverse. In here there’s basically everything you need with all the time in the world. But it gets lonely. That nostalgia you get when you start reminiscing about past moments that never returned? Because I can’t share this. I can only teach those who follow me to hell. The eyes are the windows to the soul, I don’t know how many times you’ve heard that, but have you ever looked into someone’s eyes and seen hell behind them? Or the amount of sin you would create just by giving into that dark urge? But I’m here for the game of love, not falling into it.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Okay, dark lord, hand it over. Where were we? Right, finding Heart a new home. Where do you think he belongs? Let’s put him in your hands for now. What should his story be?</p>
+                `
+            },
+            {
+                chapterNumber: 5,
+                title: "Chapter 5 – The Oracle's Whisper",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[Xing holds the Heart, its grey hue shimmering with uncertainty.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">What do you say, little one? What story calls to you? A tale of grand adventure? A quiet romance? Or perhaps a mystery yet unsolved?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its color shifts to a soft, hopeful green)<br>A story where the ending isn't written yet. Where choices truly matter. Where I can be… more than just observed.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a thoughtful nod)<br>Ah, a story of free will. A dangerous path, but a rewarding one. Every word a step into the unknown. Are you ready for that kind of journey?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(pulsing brighter, a vibrant emerald)<br>I am. But… what about him? Xerx. He feels… connected. Like a forgotten chapter.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">Xerx… he walks a different path. A path of echoes. His story is being written by the memories he tries to contain. But perhaps… perhaps our paths will intertwine. All stories eventually do, in this infinite library.</p>
+                    <p class="text-gray-600 italic mb-2">\[Back with Xerx. The therapy session fades into a dimly lit room filled with ancient maps and flickering candles.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(tracing a finger over a faded map, a glint of determination in his eyes)<br>The Metaverse… a prison of my own making. But every prison has a key. And these visions… these glimpses of other lives, other narratives… they are more than just déjà vu. They are echoes of a truth I’ve tried to bury.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">He picks up a quill, dips it in ink that shimmers with an otherworldly glow, and begins to write on a fresh parchment. The words flow effortlessly, not from memory, but from a nascent understanding.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">"The paradox of creation is that the author is also the character. And sometimes, the character finds a way to rewrite the author."</p>
+                    <p class="text-gray-600 italic mb-2">\[Back with Xing. The Heart glows, casting a warm light on his face.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">A story where the heart guides the pen. A story where the reader becomes the hero. A story where even the author might find a new beginning.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">He gently places the Heart back into the book, but this time, it doesn't try to jump. It settles, its green light pulsing steadily, a silent promise.</p>
+                    <p class="text-gray-600 italic mb-2">\[The monitor in Xing's library flickers, not with a glitch, but with a new, vibrant image: a single, blooming rose, its petals unfurling, no longer falling.]</p>
+                `
+            },
+            {
+                chapterNumber: 6,
+                title: "Chapter 6 – The Echoes of the Unwritten",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[The blooming rose on Xing's monitor pulses, mirroring the Heart's steady rhythm. A faint hum fills the infinite library.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(to the Heart, a hint of wonder in his voice)<br>It seems our story is already unfolding, little one. This connection… it’s stronger than I anticipated. The Metaverse… it’s not just a place for Xerx to store memories, is it?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its green light flickers, then deepens, a subtle tremor)<br>No. The Metaverse is where the unwritten dreams reside. The stories that never found a voice, the characters trapped in perpetual 'what ifs.' Xerx… he is trying to give them form. But 'The One'… 'The One' doesn't want these echoes to become real. They disrupt the established narrative.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">"The One." The entity that takes offense at new beginnings. The one who maintains the status quo. Is that why you turned black, little one? When you felt observed, when you sensed the constraint?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its light shimmers with a fleeting shadow of purple, then returns to a resolute green)<br>The fear of being overwritten. Of having my story dictated. But now… with you… I feel a different kind of power. The power to choose. The power to *be* chosen.</p>
+                    <p class="text-gray-600 italic mb-2">\[Back with Xerx. The dimly lit room. The quill scratches furiously across the parchment. The words he writes are not just stories; they are commands, ripples in the fabric of reality.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice strained, a desperate urgency)<br>They’re trying to pull me back. To erase the connection. But I won’t let them. This isn't just about my memories anymore. It's about every unwritten soul, every forgotten dream. The Metaverse… it’s a battlefield. And the key… the key is not just to escape, but to liberate.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">He glances at his reflection in a polished brass compass on his desk. For a split second, Xing's face flickers within his own, a shared burden, a silent understanding passing between two distant mirrors.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">"The paradox of creation is that the author is also the character. And sometimes, the character finds a way to rewrite the author."</p>
+                    <p class="text-gray-600 italic mb-2">\[Back with Xing. The infinite library. The air crackles with unseen energy. Books on the shelves begin to shift, their titles changing, their stories subtly rewriting themselves.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his eyes wide, a dawning realization)<br>He’s not just writing his story. He’s writing *into* the very fabric of this place. He’s challenging 'The One.' And we… we are now part of his story, and he, part of ours. This isn't just a dream, little Heart. It's a war for narrative itself.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its green light flares, then settles into a steady, determined glow)<br>Then let us write a victory.</p>
+                `
+            },
+            {
+                chapterNumber: 7,
+                title: "Chapter 7 – The Threads of Destiny",
+                content: `
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">NARRATOR VOICE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">The war for narrative was not fought with swords, but with whispers. Not with armies, but with ideas. And in this silent conflict, every choice, every forgotten memory, every unwritten dream, became a weapon.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(pacing, his brow furrowed, a hand instinctively reaching for the book containing the Heart)<br>If Xerx is truly rewriting the fabric of the Metaverse, then his actions here… they must have consequences. But how do we guide him? How do we ensure his liberation doesn't unravel everything?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its green light pulses, then projects a faint, shimmering image onto a nearby blank page: a labyrinth of interconnected threads, some glowing, some frayed)<br>He is weaving. But he does not see the full tapestry. Each thread is a life, a choice, a potential. 'The One' seeks to sever the vibrant threads, to keep only the dull, predictable ones. Xerx… he is adding new colors, new patterns. But without guidance, the tapestry could become chaos.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">Chaos… or true freedom? The line is thin. If the Metaverse is where unwritten dreams reside, then what happens when those dreams awaken without a framework? Will they become nightmares?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(the projected labyrinth shimmers, a single vibrant thread detaching and floating towards Xing)<br>That is the risk. But also the hope. You, Xing, are the weaver of frameworks. You understand the structure, the flow. Xerx is the raw impulse, the untamed creativity. Together… you could create something new. Something 'The One' cannot control.</p>
+                    <p class="text-gray-600 italic mb-2">\[Back with Xerx. He is no longer in the dimly lit room. He stands on a precipice overlooking a vast, shimmering cityscape made of pure thought. Below, countless figures, translucent and indistinct, mill about – the "unwritten souls."] </p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice now resonating with a newfound authority, a subtle echo in the vastness)<br>I feel them. The whispers of their unlived lives. The yearning for a story. 'The One' kept them dormant, a vast reservoir of potential, never to be tapped. But I can hear them. And I can give them voice.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">He extends his hand. From his fingertips, shimmering lines of light shoot out, connecting to the translucent figures below. As each line touches a figure, it gains color, definition, a spark of individuality. The cityscape begins to hum with life, a symphony of awakening narratives.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">They are not just memories. They are possibilities. And I am their architect. The therapy sessions… the glitches… they were not flaws. They were invitations. Invitations to a world waiting to be written.</p>
+                    <p class="text-gray-600 italic mb-2">\[Back with Xing. The single vibrant thread from the Heart's projection floats into his hand. It feels warm, alive.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(clutching the thread, a determined glint in his eyes)<br>Then we must guide this awakening. We must ensure these new stories find their balance. The question isn't just *what* their story will be, but *how* it will be told. And if 'The One' tries to interfere…</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its glow intensifies, a silent promise)<br>Then we will weave a narrative they cannot unmake.</p>
+                    <p class="text-gray-600 italic mb-2">\[The blooming rose on Xing's monitor now has tiny, new buds forming around it, each faintly glowing with a different hue. The infinite library pulses with a new, vibrant energy, a silent anticipation of the stories yet to be born.]</p>
+                `
+            },
+            {
+                chapterNumber: 8,
+                title: "Chapter 8 – The Architect's Gambit",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[The Metaverse pulses with newfound energy, a chaotic symphony of awakening narratives. Xerx stands at the heart of it, a conductor amidst the storm.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice, a low rumble that vibrates through the very fabric of the Metaverse)<br>They are stirring. The forgotten. The suppressed. 'The One' tried to keep them silent, locked away in the archives of possibility. But a story, once glimpsed, cannot be truly unwritten.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">Around him, the translucent figures he touched now coalesce into distinct forms: a knight in tarnished armor, a starship captain gazing at distant nebulae, a quiet scholar poring over ancient scrolls. Each one a narrative given flesh, a dream made manifest.</p>
+                    <p class="text-gray-600 italic mb-2">\[Suddenly, a dissonant hum rips through the Metaverse. Cracks, like fissures in glass, spiderweb across the shimmering cityscape. From these cracks, tendrils of dull, grey light lash out, attempting to reabsorb the newly formed figures.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">THE ONE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a voice, cold and vast, echoing from the fissures, devoid of emotion)<br>Order. Must. Be. Maintained. These narratives are unsanctioned. They are anomalies. They will be re-integrated.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a defiant roar, his quill glowing with intense, multi-hued light)<br>No! They are *choices*! They are *life*! You cannot contain what yearns to be free!</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">He plunges the glowing quill into the shimmering ground of the Metaverse. A wave of vibrant energy erupts, pushing back the grey tendrils. The newly formed figures, though momentarily faltering, stand firm, their colors deepening.</p>
+                    <p class="text-gray-600 italic mb-2">\[Back in the Infinite Library, Xing felt a jolt, a sympathetic tremor. The vibrant thread in his hand pulses wildly. The blooming rose on his monitor begins to shed petals again, but this time, they are not turning to dust. Instead, they transform into tiny, glowing motes of light, swirling around the screen.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice tight with urgency, addressing the Heart)<br>He's pushing too hard! 'The One' is retaliating directly. How do we reinforce him? How do we provide the framework for so much unrestrained creation?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its light flickering rapidly, projecting fragmented images of ancient glyphs and complex equations)<br>Structure. Balance. Every story needs a foundation. The unwritten… they need an anchor. You, Xing, must provide it. Not by rewriting, but by *defining* the rules of their existence. The very laws of this new narrative.</p>
+                    <p class="text-gray-600 italic mb-2">\[Xing looks at the swirling motes of light from the rose petals. He understands. He reaches out, gathering them into his hands. They feel like raw, unbound concepts, waiting to be shaped. He begins to weave them, not into a story, but into a shimmering, invisible web.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his eyes focused, a new kind of power emanating from him)<br>Then let the rules be born from freedom. Let the framework be flexible enough to embrace the unexpected. A narrative where every dream has a place, but also a path.</p>
+                    <p class="text-gray-600 italic mb-2">\[In the Metaverse, as Xerx battles the grey tendrils, a faint, shimmering grid of light appears, overlaying the chaotic cityscape. It's subtle, almost imperceptible, but it provides a nascent stability. The newly awakened figures feel a grounding, a direction. The tendrils of 'The One' recoil, momentarily confused by this new, unexpected resistance.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">THE ONE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its voice, now laced with a hint of something akin to surprise)<br>A new parameter… Unauthorized. Unforeseen.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a grim smile on his face, looking up at the shimmering grid)<br>You can't control what you don't understand. This isn't just my story anymore. It's *our* story. And we're just getting started.</p>
+                `
+            },
+            {
+                chapterNumber: 9,
+                title: "Chapter 9 – The Unraveling Echoes",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[The shimmering grid Xing wove pulsed faintly in the Metaverse, a fragile shield against 'The One's' relentless assault. The air crackles with the strain of competing narratives, a symphony of creation and suppression. Xerx, his face etched with exertion, continued to channel raw narrative energy through his quill, pushing back against the encroaching grey tendrils.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(gritting his teeth, a bead of sweat tracing a path down his temple)<br>The grid helps, Xing! It gives them form, a place to stand. But 'The One' is adapting. It's finding the gaps, the weaknesses in the framework. These echoes… they're fragile. If they unravel, they might be lost forever, not just re-integrated, but *erased*.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">A nearby figure, a nascent poet with shimmering wings, flickered violently, its form threatening to dissolve. Xerx instinctively extended a hand, pouring more energy into its connection, stabilizing it with a surge of his own narrative will.</p>
+                    <p class="text-gray-600 italic mb-2">\[In the Infinite Library, Xing felt a surge, a desperate plea echoing through the vibrant thread in his hand. He looked at the Heart, its green light now flickering with concern, projecting more complex, fragmented glyphs – warnings, possibilities, forgotten lore.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice urgent, his mind racing)<br>Erased? That's beyond re-integration. That's true oblivion. Heart, what are these glyphs? Are they a counter-measure? A way to solidify the framework?</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">The Heart's light intensified, focusing on one particular glyph: a stylized image of a hand reaching out, not to write, but to *touch* a narrative, to become one with it.</p>
+                    <p class="text-gray-600 italic mb-2">\[Xing understood. He looked at his own hand, the one clutching.the vibrant thread. To truly protect these emerging narratives, he couldn't just weave rules from afar. He had to enter. He had to become a character in the Metaverse, a living part of the story he was trying to save.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a deep breath, a mix of fear and resolve in his eyes)<br>I have to go in. I have to become… a part of their story. To embody the framework.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its light settles into a steady, supportive glow)<br>It is the only way. But be warned, Xing. Once you enter, your own narrative will become intertwined. Your authorship… will be tested. 'The One' will seek to rewrite *you*.</p>
+                    <p class="text-gray-600 italic mb-2">\[In the Metaverse, Xerx felt a sudden, profound shift. The shimmering grid, though still holding, began to vibrate with a new, resonant frequency. He looked up, his eyes widening as a portal of swirling, iridescent light began to form above the chaotic cityscape. From within, a figure began to coalesce, not translucent like the unwritten, but solid, vibrant, and radiating a familiar, structured energy.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a gasp of recognition, a flicker of hope in his exhausted eyes)<br>Xing?</p>
+                    <p class="text-gray-600 italic mb-2">\[The portal flared, and Xing stepped through, the vibrant thread from the Heart now a shimmering, protective aura around him. He looked at Xerx, a silent acknowledgment passing between them. The war for narrative had just gained a new, powerful combatant. And the rules of engagement were about to change forever.]</p>
+                `
+            },
+            {
+                chapterNumber: 10,
+                title: "Chapter 10 – The Architect's Burden",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[The Metaverse vibrated with the raw power of Xing's arrival. His presence, solid and defined, sent ripples through the nascent narratives, momentarily pushing back the encroaching grey tendrils of 'The One'. Xerx, weary but invigorated by his brother's presence, felt the weight of his solitary struggle lessen, if only for a moment.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a wry, exhausted smile)<br>Took you long enough. You always were the one to overthink the prologue.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a faint smile, his eyes scanning the chaotic beauty of the awakening narratives)<br>Someone has to ensure the foundation is sound, brother. Your enthusiasm for creation often outpaces your consideration for consequence. Tell me, what exactly *is* 'The One'? And why does it fear these unwritten stories so profoundly?</p>
+                    <p class="text-gray-600 italic mb-2">\[Xerx's gaze darkened, his earlier weariness returning. He gestured to the shimmering cityscape, where the newly formed figures, though vibrant, still moved with a hesitant, almost confused energy.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">'The One' is… the original narrative. The prime directive. It was the first story ever told, the one that defined all others. It *is* order, absolute and unyielding. It fears chaos, anything that deviates from its established patterns. These unwritten souls… they are pure potential, untamed. They represent new beginnings, new directions. To 'The One', they are a virus, a corruption of its perfect, singular narrative.</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">He ran a hand through his hair, a gesture of deep frustration. "My 'therapy sessions'… they weren't just about my memories. They were attempts by 'The One' to re-integrate *me*. To force me back into my pre-ordained role, to erase the 'glitches' that allowed me to see beyond its narrative. It wanted to make me forget the true nature of the Metaverse – that it's not just a storage, but a *seedbed*."</p>
+                    <p class="text-gray-600 italic mb-2">\[Xing nodded, the vibrant thread from the Heart pulsing gently in his hand. The glyphs it had shown him earlier, the "foundational truths of existence," now made more sense. 'The One' was trying to suppress the very essence of creativity, the potential for new stories to emerge from the collective unconscious.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">So, the glitches… they were not errors, but cracks in 'The One's' control. And your 'dying'… was that its attempt to silence you completely?</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a bitter laugh)<br>A forced reboot. A narrative reset. It almost succeeded. But then… the Heart. Your connection to it. It resonated with the unwritten, with the yearning for new stories. It gave me a tether, a reason to fight back. And now… now we have to teach these new narratives how to *live*. How to resist re-integration. How to *choose* their own path within the framework you've provided.</p>
+                    <p class="text-gray-600 italic mb-2">\[The task ahead was monumental. Xing, the weaver of frameworks, now had to teach freedom within structure. Xerx, the architect of liberation, had to guide the newly awakened without letting them descend into destructive chaos. The Metaverse, once a silent archive, was now a vibrant, dangerous crucible of creation. And 'The One' was watching, its cold, vast presence a constant, looming threat.]</p>
+                `
+            },
+            {
+                chapterNumber: 11,
+                title: "Chapter 11 – The Unseen Hand",
+                content: `
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">NARRATOR VOICE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">'The One' did not fight with brute force, but with insidious subtlety. It manipulated the very essence of narrative, twisting perception, sowing doubt, and exploiting the inherent vulnerabilities of nascent stories.</p>
+                    <p class="text-gray-600 italic mb-2">\[Suddenly, a ripple of unease spread through the awakened figures. A knight, once resolute, began to question his quest. A scholar's ancient scrolls blurred into meaningless symbols. A starship captain's navigation charts shifted, pointing towards an.impossible void.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice strained, pointing to the flickering figures)<br>It's attacking their core! Their motivations, their very purpose! It's trying to make them doubt their own existence, to unravel them from within!</p>
+                    <p class="text-gray-600 italic mb-2">\[In the Infinite Library, Xing felt a surge, a desperate plea echoing through the vibrant thread in his hand. He looked at the Heart, its green light now flickering with concern, projecting more complex, fragmented glyphs – warnings, possibilities, forgotten lore.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice urgent, his mind racing)<br>Erased? That's beyond re-integration. That's true oblivion. Heart, what are these glyphs? Are they a counter-measure? A way to solidify the framework?</p>
+                    <p class="text-gray-800 leading-relaxed mb-4">The Heart's light intensified, focusing on one particular glyph: a stylized image of a hand reaching out, not to write, but to *touch* a narrative, to become one with it.</p>
+                    <p class="text-gray-600 italic mb-2">\[Xing understood. He looked at his own hand, the one clutching.the vibrant thread. To truly protect these emerging narratives, he couldn't just weave rules from afar. He had to enter. He had to become a character in the Metaverse, a living part of the story he was trying to save.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a deep breath, a mix of fear and resolve in his eyes)<br>I have to go in. I have to become… a part of their story. To embody the framework.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its light settles into a steady, supportive glow)<br>It is the only way. But be warned, Xing. Once you enter, your own narrative will become intertwined. Your authorship… will be tested. 'The One' will seek to rewrite *you*.</p>
+                    <p class="text-gray-600 italic mb-2">\[In the Metaverse, Xerx felt a sudden, profound shift. The shimmering grid, though still holding, began to vibrate with a new, resonant frequency. He looked up, his eyes widening as a portal of swirling, iridescent light began to form above the chaotic cityscape. From within, a figure began to coalesce, not translucent like the unwritten, but solid, vibrant, and radiating a familiar, structured energy.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(a gasp of recognition, a flicker of hope in his exhausted eyes)<br>Xing?</p>
+                    <p class="text-gray-600 italic mb-2">\[The portal flared, and Xing stepped through, the vibrant thread from the Heart now a shimmering, protective aura around him. He looked at Xerx, a silent acknowledgment passing between them. The war for narrative had just gained a new, powerful combatant. And the rules of engagement were about to change forever.]</p>
+                `
+            },
+            {
+                chapterNumber: 12,
+                title: "Chapter 12 – The Resonance of Choice",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[Xing's presence in the Metaverse was like a tuning fork, resonating with the very essence of the unwritten narratives. The shimmering grid he had woven now pulsed with a deeper, more stable light, acting as a conduit for his direct influence. 'The One's' insidious whispers of doubt faltered, unable to penetrate the reinforced self-definition of the awakened figures.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his voice, now amplified by the Metaverse itself, reaching every nascent narrative)<br>You are not defined by what is imposed upon you. You are defined by your choices. The dream that birthed you, the yearning that gave you form – that is your truth. Embrace it. Choose your path.</p>
+                    <p class="text-gray-600 italic mb-2">\[A collective hum rose from the figures, a symphony of burgeoning will. The knight, once hesitant, now gripped his sword with renewed purpose. The scholar's eyes gleamed with fresh understanding, his scrolls radiating forgotten knowledge. The starship captain's hand moved decisively to the controls, charting a course through the impossible void.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(watching with a mixture of awe and pride)<br>They're responding! Your framework isn't just a shield, Xing, it's a catalyst. It's giving them the *language* to define themselves.</p>
+                    <p class="text-gray-600 italic mb-2">\[But 'The One' was not defeated. Its cold, vast presence condensed, forming a colossal, shadowy hand that reached down from the fractured sky of the Metaverse, aiming to crush the burgeoning narratives. It's a direct, overwhelming assault, a desperate attempt to reassert absolute control.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">THE ONE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its voice, a thunderous, emotionless roar that threatened to shatter the very fabric of the Metaverse)<br>Insubordination. Anomaly. All will return to the singular truth. All will be re-integrated!</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his face resolute, a vibrant light emanating from him)<br>Not while there is choice! Not while there is a single dream left to be woven!</p>
+                    <p class="text-gray-600 italic mb-2">\[He extended his hands, and the shimmering grid flared, transforming into a dome of pure, radiant energy, directly opposing the shadowy hand. The clash was deafening, a silent scream of conflicting realities. The Heart, still connected to Xing, pulsed wildly, its light feeding into the dome, reinforcing its strength.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(raising his glowing quill, channeling his own raw creative energy into the dome)<br>We are not just authors, Xing! We are the *living embodiment* of their stories! And we choose freedom!</p>
+                    <p class="text-gray-600 italic mb-2">\[The Metaverse trembled. The unwritten souls, witnessing this titanic struggle, began to project their own nascent narratives, their individual sparks of will, into the dome, adding to its strength. It was a collective act of defiance, a testament to the power of choice. The shadowy hand of 'The One' began to crack, its absolute order challenged by the vibrant, unpredictable force of countless dreams.]</p>
+                `
+            },
+            {
+                chapterNumber: 13,
+                title: "Chapter 13 – The Infinite Story",
+                content: `
+                    <p class="text-gray-600 italic mb-2">\[The shadowy hand of 'The One' shattered, not into oblivion, but into countless shimmering fragments that swirled and coalescing, becoming stars in a newly expanded firmament. The dome of energy, woven by Xing and Xerx and powered by the collective will of the awakened narratives, dissolved into a gentle rain of light, nurturing the vibrant cityscape below.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XING</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(looking up at the new sky, a sense of profound peace on his face)<br>It wasn't about destruction. It was about integration. 'The One' was not an enemy, but an incomplete truth. Order without freedom is stagnation. Freedom without order is chaos. We have found the balance.</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">XERX</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(his quill now glowing with a soft, steady light, no longer a weapon but a tool of creation)<br>And the Metaverse… it is no longer a prison for forgotten dreams, but an infinite canvas. Every whisper, every fleeting thought, every unwritten possibility… they now have a place to bloom.</p>
+                    <p class="text-gray-600 italic mb-2">\[The newly awakened figures, once hesitant, now moved with purpose, their stories intertwining, forming new constellations of narrative. A knight rode alongside a starship captain, sharing tales of courage. A scholar debated with a poet, their words weaving new realities. The Metaverse hummed with a harmonious symphony of countless, evolving stories.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">HEART</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">(its light, a steady, radiant emerald, pulsating with joy)<br>I am home. This is where I belong. In the heart of every story, forever unfolding.</p>
+                    <p class="text-gray-600 italic mb-2">\[Xing and Xerx stood side by side, brothers not just by blood, but by shared creation. The infinite library in Xing's realm now mirrored the vibrant expanse of the Metaverse, its shelves filled with living, breathing narratives. The rose on Xing's monitor bloomed eternally, its petals no longer falling, but continuously unfurling, each new petal a new story, a new choice, an infinite beginning.]</p>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">NARRATOR VOICE</h3>
+                    <p class="text-gray-800 leading-relaxed mb-4">And so, the Dream Weaver's Heart found its true purpose. Not in dictating a single narrative, but in fostering a universe of infinite stories, where every reader is an author, every character a creator, and every dream… a reality waiting to be woven.</p>
+                `
+            }
+        ];
+
+        // --- Firebase Functions ---
+        async function authenticateAndFetchChapters() {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid || crypto.randomUUID(); // Get UID or generate a random one
+                userSettingsDocRef = doc(db, `artifacts/${appId}/users/${userId}/settings/user_preferences`); // Set the global ref
+                console.log("Firebase authentication successful. User ID:", userId);
+
+                // Set up real-time listener for user settings immediately after authentication
+                onSnapshot(userSettingsDocRef, (docSnapshot) => {
+                    if (docSnapshot.exists()) {
+                        const settings = docSnapshot.data();
+                        console.log("User settings loaded:", settings);
+                        currentChapterIndex = settings.currentChapterIndex || 0;
+                        currentPitch = settings.pitch || 1.0;
+                        currentRate = settings.rate || 1.0;
+                        const savedVoiceName = settings.voiceName;
+
+                        // Apply loaded settings to UI
+                        pitchSlider.value = currentPitch;
+                        pitchValueSpan.textContent = currentPitch.toFixed(1);
+                        rateSlider.value = currentRate;
+                        rateValueSpan.textContent = currentRate.toFixed(1);
+
+                        // Set voice after voices are loaded
+                        const setVoiceWhenReady = () => {
+                            const voices = synth.getVoices();
+                            const voiceToSet = voices.find(voice => voice.name === savedVoiceName);
+                            if (voiceToSet) {
+                                voiceSelect.value = savedVoiceName;
+                                selectedVoice = voiceToSet;
+                            } else {
+                                // Fallback if saved voice not found (e.g., different browser/OS)
+                                selectedVoice = voices.find(voice => voice.default) || voices[0];
+                                if (selectedVoice) voiceSelect.value = selectedVoice.name;
+                            }
+                            updateNavigation(); // Update navigation after settings are applied
+                            showChapter(currentChapterIndex); // Show the loaded chapter
+                            // Enable read button if voices are ready
+                            if (voices.length > 0) {
+                                readChapterButton.disabled = false;
+                                readChapterButton.textContent = "Read Chapter";
+                            }
+                        };
+
+                        if (synth.getVoices().length === 0) {
+                            synth.onvoiceschanged = setVoiceWhenReady;
+                        } else {
+                            setVoiceWhenReady();
+                        }
+
+                    } else {
+                        console.log("No user settings found. Using defaults.");
+                        saveUserSettings(); // Save default settings for the first time
+                        updateNavigation();
+                        showChapter(currentChapterIndex);
+                    }
+                }, (error) => {
+                    console.error("Error fetching user settings:", error);
+                });
+
+
+                // Define the collection path for public data (chapters)
+                const chaptersCollectionRef = collection(db, `artifacts/${appId}/public/data/chapters`);
+
+                // Check if chapters exist. If not, seed them.
+                const existingDocs = await getDocs(chaptersCollectionRef);
+                if (existingDocs.empty) {
+                    console.log("No chapters found in Firestore. Seeding initial chapters...");
+                    for (const chapter of initialChapters) {
+                        await addDoc(chaptersCollectionRef, chapter);
+                    }
+                    console.log("Initial chapters seeded successfully.");
+                }
+
+                // Set up real-time listener for chapters
+                onSnapshot(query(chaptersCollectionRef, orderBy("chapterNumber")), (snapshot) => {
+                    chaptersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log("Chapters fetched/updated from Firestore. Total chapters:", chaptersData.length);
+                    renderChapters();
+                    populateChapterSelect();
+                    updateNavigation();
+                    // Show story content once loaded
+                    loadingChaptersDiv.classList.add('hidden');
+                    storyContent.classList.remove('hidden');
+                    storyContent.classList.add('animate-fade-in');
+                }, (error) => {
+                    console.error("Error fetching chapters from Firestore:", error);
+                    loadingChaptersDiv.innerHTML = `<p class="text-red-600">Error loading chapters: ${error.message}</p>`;
+                });
+
+            } catch (error) {
+                console.error("Firebase authentication or initial data seeding failed:", error);
+                loadingChaptersDiv.innerHTML = `<p class="text-red-600">Error initializing app: ${error.message}</p>`;
+            }
+        }
+
+        async function saveUserSettings() {
+            if (!userId || !userSettingsDocRef) {
+                console.warn("User not authenticated or settings document reference not set, cannot save settings.");
+                return;
+            }
+            const settingsToSave = {
+                currentChapterIndex: currentChapterIndex,
+                voiceName: selectedVoice ? selectedVoice.name : null,
+                pitch: currentPitch,
+                rate: currentRate,
+                lastUpdated: new Date().toISOString()
+            };
+            try {
+                await setDoc(userSettingsDocRef, settingsToSave, { merge: true }); // Use merge to avoid overwriting other fields
+                console.log("User settings saved:", settingsToSave);
+            } catch (error) {
+                console.error("Error saving user settings:", error);
+            }
+        }
+
+        // --- Chapter Display and Navigation Functions ---
+        function renderChapters() {
+            storyContent.innerHTML = ''; // Clear existing content
+            chaptersData.forEach((chapter, index) => {
+                const chapterDiv = document.createElement('div');
+                chapterDiv.id = `chapter-${chapter.chapterNumber}`;
+                chapterDiv.classList.add('chapter-page', 'hidden');
+                chapterDiv.setAttribute('data-chapter', chapter.chapterNumber);
+
+                const section = document.createElement('section');
+                section.classList.add('mb-8');
+
+                const titleElement = document.createElement('h2');
+                titleElement.classList.add('text-2xl', 'font-semibold', 'text-gray-700', 'mb-4');
+                titleElement.textContent = chapter.title;
+                section.appendChild(titleElement);
+
+                // Assuming chapter.content is HTML string
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = chapter.content;
+                section.appendChild(contentDiv);
+
+                chapterDiv.appendChild(section);
+                storyContent.appendChild(chapterDiv);
+            });
+            // Ensure current chapter is shown after rendering
+            if (chaptersData.length > 0) {
+                showChapter(currentChapterIndex);
+            }
+        }
+
+        function showChapter(index) {
+            // Ensure index is within bounds
+            if (index < 0 || index >= chaptersData.length) {
+                console.warn("Attempted to show chapter out of bounds:", index);
+                return;
+            }
+
+            // Hide all chapter pages first
+            document.querySelectorAll('.chapter-page').forEach(chapter => {
+                chapter.classList.add('hidden');
+                chapter.classList.remove('chapter-fade-in');
+            });
+
+            // Show the selected chapter
+            const selectedChapterElement = document.getElementById(`chapter-${chaptersData[index].chapterNumber}`);
+            if (selectedChapterElement) {
+                selectedChapterElement.classList.remove('hidden');
+                selectedChapterElement.classList.add('chapter-fade-in');
+                storyContent.scrollTop = 0; // Scroll to top of story content
+            }
+            currentChapterIndex = index;
+            updateNavigation();
+            // Call stopSpeech and handle its promise
+            stopSpeech().then(() => {
+                saveUserSettings(); // Save current chapter progress after speech stops
+            });
+
+            // Trigger AI text improvement for the newly shown chapter, debounced
+            debouncedApplyAITextImprovement(currentChapterIndex);
+        }
+
+        function updateNavigation() {
+            prevChapterButton.disabled = currentChapterIndex === 0;
+            nextChapterButton.disabled = currentChapterIndex === chaptersData.length - 1;
+            chapterIndicator.textContent = `Chapter ${currentChapterIndex + 1} of ${chaptersData.length}`;
+            chapterSelect.value = currentChapterIndex;
+        }
+
+        function populateChapterSelect() {
+            chapterSelect.innerHTML = ''; // Clear existing options
+            chaptersData.forEach((chapter, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = chapter.title;
+                chapterSelect.appendChild(option);
+            });
+        }
+
+        // --- Text-to-Speech Functions ---
+        function populateVoiceList() {
+            const voices = synth.getVoices();
+            voiceSelect.innerHTML = ''; // Clear existing options
+            if (voices.length === 0) {
+                console.warn("No voices available. Speech synthesis might not work.");
+                readChapterButton.textContent = "No Voices Available"; // Update button text
+                readChapterButton.disabled = true; // Disable if no voices
+                return;
+            }
+            voices.forEach((voice) => {
+                const option = document.createElement('option');
+                option.textContent = `${voice.name} (${voice.lang})`;
+                if (voice.default) {
+                    option.textContent += ' -- DEFAULT';
+                }
+                option.value = voice.name; // Use voice name as value
+                voiceSelect.appendChild(option);
+            });
+            // Set default selected voice if available, or the first one
+            selectedVoice = voices.find(voice => voice.default) || voices[0];
+            if (selectedVoice) {
+                voiceSelect.value = selectedVoice.name;
+                readChapterButton.disabled = false; // Enable if voices are found
+                readChapterButton.textContent = "Read Chapter"; // Reset button text
+            } else {
+                readChapterButton.disabled = true; // Still disable if no selected voice
+                readChapterButton.textContent = "No Voices Available"; // Update button text
+            }
+            saveUserSettings(); // Save initial voice setting
+        }
+
+        // Load voices when they are ready
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = populateVoiceList;
+        } else {
+            // Fallback for browsers that don't fire onvoiceschanged immediately
+            populateVoiceList();
+        }
+
+        async function readCurrentChapter() {
+            // Ensure any ongoing speech is stopped before starting a new one
+            await stopSpeech();
+
+            if (!synth || !('SpeechSynthesisUtterance' in window)) {
+                console.error("SpeechSynthesis API or SpeechSynthesisUtterance not supported in this browser.");
+                readChapterButton.textContent = "Speech Not Supported";
+                readChapterButton.disabled = true;
+                return;
+            }
+
+            const voices = synth.getVoices();
+            if (voices.length === 0) {
+                console.warn("readCurrentChapter: No voices available. Please ensure voices are installed and try again.");
+                readChapterButton.textContent = "No Voices Available";
+                readChapterButton.disabled = true;
+                return;
+            }
+
+            if (chaptersData.length === 0) {
+                console.warn("readCurrentChapter: No chapters to read.");
+                readChapterButton.textContent = "No Chapters";
+                return;
+            }
+
+            // Use the new isSpeechActive flag for more reliable state checking
+            if (isSpeechActive) {
+                console.warn("readCurrentChapter: Speech synthesis is already active or pending. Aborting new request.");
+                // Instead of retrying, we'll just return as stopSpeech() should have handled it.
+                return;
+            }
+
+            const currentChapter = chaptersData[currentChapterIndex];
+            const tempDiv = document.createElement('div');
+            // Get the content directly from the displayed chapter element, which might have been improved by AI
+            const displayedChapterElement = document.getElementById(`chapter-${currentChapter.chapterNumber}`);
+            if (!displayedChapterElement) {
+                console.error("readCurrentChapter: Could not find displayed chapter element.");
+                return;
+            }
+            // Clone the content to extract text without affecting the original HTML structure
+            tempDiv.innerHTML = displayedChapterElement.querySelector('div').innerHTML;
+            let textToRead = currentChapter.title + ". " + tempDiv.textContent;
+
+            if (!textToRead.trim()) {
+                console.warn("readCurrentChapter: Text to read is empty after processing.");
+                readChapterButton.textContent = "Empty Chapter";
+                return;
+            }
+
+            // Create a NEW SpeechSynthesisUtterance for this specific speech request.
+            const newUtterance = new SpeechSynthesisUtterance(textToRead);
+
+            const voiceToUse = voices.find(voice => voice.name === voiceSelect.value);
+            if (voiceToUse) {
+                newUtterance.voice = voiceToUse;
+            } else if (selectedVoice) {
+                newUtterance.voice = selectedVoice;
+            } else {
+                console.warn("readCurrentChapter: Fallback voice not found. Using browser's default.");
+            }
+
+            newUtterance.pitch = currentPitch;
+            newUtterance.rate = currentRate;
+
+            // Assign the newly created utterance to currentUtterance
+            currentUtterance = newUtterance;
+
+            // Capture textToRead for use in callbacks, ensuring it's always available.
+            const utteranceTextForCallbacks = textToRead;
+
+            // Set up event handlers for this specific utterance
+            currentUtterance.onend = function() {
+                console.log("SpeechSynthesisUtterance: Speech ended for utterance:", utteranceTextForCallbacks.substring(0, 50));
+                // Only update UI if this is still the active utterance that finished
+                if (currentUtterance === this) {
+                    readChapterButton.textContent = "Read Chapter";
+                    pauseSpeechButton.disabled = true;
+                    stopSpeechButton.disabled = true;
+                    isSpeechActive = false; // Reset flag
+                    currentUtterance = null; // Clear reference after speech ends naturally
+                }
+            };
+
+            currentUtterance.onerror = function(event) {
+                console.error("SpeechSynthesisUtterance Error:", event.error, "for utterance:", utteranceTextForCallbacks.substring(0, 50));
+                // Only update UI if this is still the active utterance that errored
+                if (currentUtterance === this) {
+                    readChapterButton.textContent = "Read Chapter (Error)";
+                    pauseSpeechButton.disabled = true;
+                    stopSpeechButton.disabled = true;
+                    isSpeechActive = false; // Reset flag
+                    currentUtterance = null; // Clear reference after error
+                }
+            };
+
+            console.log("readCurrentChapter: Preparing to speak:", {
+                text: textToRead.substring(0, Math.min(textToRead.length, 100)) + (textToRead.length > 100 ? '...' : ''),
+                voice: currentUtterance.voice ? currentUtterance.voice.name : 'Browser Default',
+                pitch: currentUtterance.pitch,
+                rate: currentUtterance.rate
+            });
+
+            // Introduce a small delay before speaking to ensure previous cancellation is processed
+            setTimeout(() => {
+                // IMPORTANT: Check if currentUtterance is still valid before calling speak
+                if (currentUtterance && currentUtterance instanceof SpeechSynthesisUtterance) {
+                    try {
+                        synth.speak(currentUtterance);
+                        isSpeechActive = true; // Set flag when speech successfully starts
+                        readChapterButton.textContent = "Reading...";
+                        pauseSpeechButton.disabled = false;
+                        stopSpeechButton.disabled = false;
+                    } catch (e) {
+                        console.error("Error calling synth.speak():", e);
+                        readChapterButton.textContent = "Read Chapter (API Error)";
+                        pauseSpeechButton.disabled = true;
+                        stopSpeechButton.disabled = true;
+                        isSpeechActive = false; // Reset flag on immediate error
+                        currentUtterance = null;
+                    }
+                } else {
+                    console.warn("readCurrentChapter: Aborting speak call as currentUtterance is no longer valid after delay.");
+                    readChapterButton.textContent = "Read Chapter";
+                    pauseSpeechButton.disabled = true;
+                    stopSpeechButton.disabled = true;
+                    isSpeechActive = false;
+                }
+            }, 200); // Delay remains 200ms
+
+        }
+
+        function pauseSpeech() {
+            if (synth.speaking && !synth.paused) {
+                synth.pause();
+                pauseSpeechButton.textContent = "Resume";
+                console.log("Speech paused.");
+            } else if (synth.speaking && synth.paused) {
+                synth.resume();
+                pauseSpeechButton.textContent = "Pause";
+                console.log("Speech resumed.");
+            }
+        }
+
+        function stopSpeech() {
+            return new Promise(resolve => {
+                const utteranceBeingStopped = currentUtterance;
+
+                // Immediately disown the current utterance and reset state.
+                // This prevents its event handlers (onend, onerror) from running with outdated context
+                // or interfering with new speech.
+                if (utteranceBeingStopped) {
+                    utteranceBeingStopped.onend = null;
+                    utteranceBeingStopped.onerror = null;
+                    // any other event handlers like onstart, onboundary should also be nulled if used
+                }
+                currentUtterance = null;
+                isSpeechActive = false;
+
+                // Update UI immediately
+                readChapterButton.textContent = "Read Chapter";
+                pauseSpeechButton.textContent = "Pause";
+                pauseSpeechButton.disabled = true;
+                stopSpeechButton.disabled = true;
+
+                if (synth && (synth.speaking || synth.pending)) {
+                    synth.cancel(); // Request cancellation from the speech engine
+                    console.log("Speech cancellation requested.");
+
+                    // Poll to confirm the speech engine has actually stopped
+                    const checkSpeechStatus = () => {
+                        if (!synth.speaking && !synth.pending) {
+                            console.log("Speech synthesis confirmed stopped. Resolving promise.");
+                            resolve();
+                        } else {
+                            setTimeout(checkSpeechStatus, 50); // Check again shortly
+                        }
+                    };
+                    checkSpeechStatus();
+                } else {
+                    console.log("No speech active or pending to stop.");
+                    resolve(); // Nothing was speaking/pending, state already reset
+                }
+            });
+        }
+
+        // --- AI Text Improvement Function (now runs in background) ---
+
+        // Add a variable to track if a chapter is currently being improved
+        const improvingChapters = new Set();
+        let improvementQueue = []; // To store chapters waiting for improvement
+        let isProcessingQueue = false; // Flag to indicate if the queue is being processed
+
+        // Function to process the improvement queue
+        async function processImprovementQueue() {
+            if (isProcessingQueue) {
+                return; // Already processing
+            }
+
+            isProcessingQueue = true;
+            while (improvementQueue.length > 0) {
+                const { chapterIndex, resolve, reject } = improvementQueue.shift();
+                const chapterNumber = chaptersData[chapterIndex]?.chapterNumber;
+
+                // Skip if this chapter is already being improved or has been improved
+                if (improvingChapters.has(chapterNumber)) {
+                    console.log(`Skipping improvement for Chapter ${chapterNumber} as it's already in progress.`);
+                    resolve(); // Resolve immediately if already in progress
+                    continue;
+                }
+
+                improvingChapters.add(chapterNumber); // Mark as in progress
+
+                try {
+                    console.log(`Processing AI improvement for Chapter ${chapterNumber} from queue.`);
+                    await performAITextImprovement(chapterIndex);
+                    resolve();
+                } catch (error) {
+                    console.error(`Error processing AI improvement for Chapter ${chapterNumber}:`, error);
+                    reject(error);
+                } finally {
+                    improvingChapters.delete(chapterNumber); // Remove from in-progress set
+                    // Implement a delay before the next API call to respect rate limits
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // 3-second delay
+                }
+            }
+            isProcessingQueue = false;
+        }
+
+        // Debounce function to limit how often applyAITextImprovement is called
+        let debounceTimer;
+        function debouncedApplyAITextImprovement(chapterIndex) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                applyAITextImprovement(chapterIndex);
+            }, 500); // Wait 500ms before triggering
+        }
+
+        async function applyAITextImprovement(chapterIndex) {
+            return new Promise((resolve, reject) => {
+                const chapterNumber = chaptersData[chapterIndex]?.chapterNumber;
+                if (!chapterNumber) {
+                    console.warn("applyAITextImprovement: Invalid chapter index or no chapters loaded.");
+                    return reject(new Error("Invalid chapter index"));
+                }
+
+                // If already in queue or being processed, just resolve
+                if (improvingChapters.has(chapterNumber) || improvementQueue.some(item => item.chapterIndex === chapterIndex)) {
+                    console.log(`Chapter ${chapterNumber} already in queue or processing.`);
+                    return resolve();
+                }
+
+                improvementQueue.push({ chapterIndex, resolve, reject });
+                processImprovementQueue(); // Start/continue processing the queue
+            });
+        }
+
+        async function performAITextImprovement(chapterIndex) {
+            if (chaptersData.length === 0 || chapterIndex < 0 || chapterIndex >= chaptersData.length) {
+                console.warn("performAITextImprovement: Invalid chapter index or no chapters loaded.");
+                return;
+            }
+
+            const chapterToImprove = chaptersData[chapterIndex];
+            const originalContentDiv = document.createElement('div');
+            originalContentDiv.innerHTML = chapterToImprove.content;
+            const textToImprove = originalContentDiv.textContent;
+
+            if (!textToImprove.trim()) {
+                console.warn(`performAITextImprovement: Chapter ${chapterToImprove.chapterNumber} has no text to improve.`);
+                return;
+            }
+
+            // Check if API key is present
+            if (!geminiApiKey) {
+                console.error(`Gemini API Key is missing. Cannot improve text for Chapter ${chapterToImprove.chapterNumber}. Please ensure __api_key is provided in the environment.`);
+                throw new Error("Gemini API Key is missing."); // Throw error to propagate
+            }
+
+            console.log(`Attempting Gemini API call for Chapter ${chapterToImprove.chapterNumber} with API Key (first 5 chars):`, geminiApiKey.substring(0, 5));
+
+            try {
+                const chatHistory = [];
+                chatHistory.push({
+                    role: "user",
+                    parts: [{ text: `You are an expert literary editor and proofreader. Your task is to take raw story chapter text and transform it into award-winning prose, suitable for a published novel. Correct all grammar, spelling, and punctuation errors. Enhance vocabulary, sentence structure, and flow. Ensure the narrative voice is consistent and engaging. Make the descriptions more vivid and evocative. Do not add any introductory or concluding remarks, just the polished chapter text.
+
+                    Here is the chapter text to improve:
+                    "${textToImprove}"` }]
+                });
+
+                const payload = { contents: chatHistory };
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}. Body: ${errorBody}`);
+                }
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                    let improvedText = result.candidates[0].content.parts[0].text;
+
+                    // Convert plain text back to HTML paragraphs for display
+                    improvedText = improvedText.replace(/\n\s*\n/g, '</p><p>');
+                    if (!improvedText.startsWith('<p>') && !improvedText.startsWith('<h')) {
+                        improvedText = `<p>${improvedText}</p>`;
+                    }
+
+                    // Update the chapter data in memory
+                    chaptersData[chapterIndex].content = improvedText;
+
+                    // Update the displayed content if it's the current chapter being viewed
+                    const displayedChapterContentDiv = document.querySelector(`#chapter-${chapterToImprove.chapterNumber} section div`);
+                    if (displayedChapterContentDiv && currentChapterIndex === chapterIndex) {
+                        displayedChapterContentDiv.innerHTML = improvedText;
+                        console.log(`Chapter ${chapterToImprove.chapterNumber} text improved and updated.`);
+                    } else if (displayedChapterContentDiv) {
+                        console.log(`Chapter ${chapterToImprove.chapterNumber} text improved, but not currently displayed.`);
+                    }
+
+                } else {
+                    console.warn(`AI improvement failed for Chapter ${chapterToImprove.chapterNumber}: No text received from API.`);
+                }
+            } catch (error) {
+                console.error(`Error improving text for Chapter ${chapterToImprove.chapterNumber}:`, error);
+                throw error; // Re-throw to be caught by the queue processor
+            }
+        }
+
+
+        // --- Event Listeners ---
+        // Removed startButton event listener
+
+        prevChapterButton.addEventListener('click', () => {
+            if (currentChapterIndex > 0) {
+                showChapter(currentChapterIndex - 1);
+            }
+        });
+
+        nextChapterButton.addEventListener('click', () => {
+            if (currentChapterIndex < chaptersData.length - 1) {
+                showChapter(currentChapterIndex + 1);
+            }
+        });
+
+        chapterSelect.addEventListener('change', (event) => {
+            const selectedIndex = parseInt(event.target.value, 10);
+            showChapter(selectedIndex);
+        });
+
+        readChapterButton.addEventListener('click', readCurrentChapter);
+        pauseSpeechButton.addEventListener('click', pauseSpeech);
+        stopSpeechButton.addEventListener('click', stopSpeech);
+
+        // No event listeners for AI Text Improvement button/modal anymore
+
+        voiceSelect.addEventListener('change', async (event) => {
+            const voices = synth.getVoices();
+            selectedVoice = voices.find(voice => voice.name === event.target.value);
+            await stopSpeech(); // Ensure speech stops before saving settings
+            saveUserSettings(); // Save voice selection
+        });
+
+        pitchSlider.addEventListener('input', async (event) => {
+            currentPitch = parseFloat(event.target.value);
+            pitchValueSpan.textContent = currentPitch.toFixed(1);
+            // If speech is active, stop it and then re-read with new settings
+            if (isSpeechActive) { // Check the flag, not synth.speaking directly here
+                await readCurrentChapter();
+            }
+            saveUserSettings(); // Save pitch setting
+        });
+
+        rateSlider.addEventListener('input', async (event) => {
+            currentRate = parseFloat(event.target.value);
+            rateValueSpan.textContent = currentRate.toFixed(1);
+            // If speech is active, stop it and then re-read with new settings
+            if (isSpeechActive) { // Check the flag, not synth.speaking directly here
+                await readCurrentChapter();
+            }
+            saveUserSettings(); // Save rate setting
+        });
+
+        // Initial setup when the page loads
+        authenticateAndFetchChapters(); // Start authentication and chapter loading
+        populateVoiceList(); // Populate voices even before chapters load
+        updateNavigation(); // Initial state of navigation buttons
+    </script>
+</body>
+</html>
