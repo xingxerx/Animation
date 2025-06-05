@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Planetary Explorer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 200px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .weather-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 180px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div class="crosshair"></div>
+        <div class="loading" id="loading">Loading 3D World...</div>
+        
+        <!-- UI Panels -->
+        <div class="ui-panel" id="uiPanel" style="display: none;">
+            <div><strong>🚀 Player Status</strong></div>
+            <div>Position: <span id="playerPos">X: 0, Y: 0, Z: 0</span></div>
+            <div>Altitude: <span id="altitude">0m</span></div>
+            <div>Speed: <span id="speed">0 m/s</span></div>
+            <div>Gravity: <span id="gravity">9.8 m/s²</span></div>
+            <div>Health: <span id="health">100%</span></div>
+            <div>Oxygen: <span id="oxygen">100%</span></div>
+            <div>Temperature: <span id="temperature">22°C</span></div>
+        </div>
+        
+        <div class="controls" id="controlsPanel" style="display: none;">
+            <div><strong>🎮 Controls</strong></div>
+            <div>WASD: Move Forward/Back/Strafe</div>
+            <div>Mouse: Look Around</div>
+            <div>Space: Jump</div>
+            <div>Shift: Run</div>
+            <div>R: Toggle Rain</div>
+            <div>T: Time of Day</div>
+            <div>F: Toggle Flashlight</div>
+            <div>ESC: Release Mouse</div>
+        </div>
+        
+        <div class="weather-panel" id="weatherPanel" style="display: none;">
+            <div><strong>🌍 Planet Data</strong></div>
+            <div>Weather: <span id="weather">Clear</span></div>
+            <div>Wind: <span id="wind">5 km/h</span></div>
+            <div>Humidity: <span id="humidity">60%</span></div>
+            <div>Pressure: <span id="pressure">1013 hPa</span></div>
+            <div>Day/Night: <span id="timeOfDay">Day</span></div>
+            <div>Visibility: <span id="visibility">10km</span></div>
+        </div>
+    </div>
+
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // Game state
+        const gameState = {
+            player: {
+                position: new THREE.Vector3(0, 505, 0), // Start 5m above planet surface
+                velocity: new THREE.Vector3(0, 0, 0),
+                health: 100,
+                oxygen: 100,
+                onGround: false,
+                speed: 0,
+                maxSpeed: 10,
+                jumpPower: 15
+            },
+            planet: {
+                radius: 500, // Much larger planet
+                mass: 1000000,
+                rotationSpeed: 0.001
+            },
+            camera: {
+                pitch: 0,
+                yaw: 0,
+                sensitivity: 0.002
+            },
+            weather: {
+                type: 'clear',
+                windSpeed: 5,
+                temperature: 22,
+                humidity: 60,
+                pressure: 1013,
+                visibility: 10
+            },
+            time: 0,
+            isDay: true,
+            gravity: 9.8,
+            keys: {},
+            mouseX: 0,
+            mouseY: 0,
+            isPointerLocked: false,
+            flashlight: false
+        };
+
+        // Three.js setup
+        let scene, camera, renderer, planet, player, sun, moon;
+        let planetMesh, atmosphereMesh, cloudsMesh;
+        let stars = [];
+        let rainParticles = [];
+        let controls = {};
+
+        // Initialize the 3D scene
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 1000, 3000);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+            camera.position.copy(gameState.player.position);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('gameCanvas'),
+                antialias: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            createPlanet();
+            createCelestialBodies();
+            createStars();
+            createPlayer();
+            createLighting();
+            createAtmosphere();
+            
+            setupEventListeners();
+            
+            // Hide loading screen
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('uiPanel').style.display = 'block';
+            document.getElementById('controlsPanel').style.display = 'block';
+            document.getElementById('weatherPanel').style.display = 'block';
+        }
+
+        // Create the planet
+        function createPlanet() {
+            // Planet geometry with higher detail
+            const planetGeometry = new THREE.SphereGeometry(gameState.planet.radius, 64, 64);
+            
+            // Create planet texture
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            // Create a procedural planet texture
+            const imageData = ctx.createImageData(canvas.width, canvas.height);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                const x = (i / 4) % canvas.width;
+                const y = Math.floor((i / 4) / canvas.width);
+                
+                // Create continents and oceans
+                const noise = Math.sin(x * 0.01) * Math.cos(y * 0.01) + 
+                             Math.sin(x * 0.005) * Math.cos(y * 0.005) * 0.5;
+                
+                if (noise > 0.1) {
+                    // Land - green/brown
+                    imageData.data[i] = 34 + noise * 50;     // R
+                    imageData.data[i + 1] = 139 + noise * 50; // G
+                    imageData.data[i + 2] = 34;               // B
+                } else {
+                    // Ocean - blue
+                    imageData.data[i] = 25;      // R
+                    imageData.data[i + 1] = 25;  // G
+                    imageData.data[i + 2] = 112; // B
+                }
+                imageData.data[i + 3] = 255; // A
+            }
+            ctx.putImageData(imageData, 0, 0);
+            
+            const planetTexture = new THREE.CanvasTexture(canvas);
+            const planetMaterial = new THREE.MeshLambertMaterial({ 
+                map: planetTexture,
+                transparent: false
+            });
+            
+            planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+            planetMesh.receiveShadow = true;
+            scene.add(planetMesh);
+        }
+
+        // Create sun and moon
+        function createCelestialBodies() {
+            // Sun
+            const sunGeometry = new THREE.SphereGeometry(50, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00,
+                emissive: 0xffaa00
+            });
+            sun = new THREE.Mesh(sunGeometry, sunMaterial);
+            sun.position.set(2000, 500, 0);
+            scene.add(sun);
+
+            // Moon
+            const moonGeometry = new THREE.SphereGeometry(25, 32, 32);
+            const moonMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+            moon = new THREE.Mesh(moonGeometry, moonMaterial);
+            moon.position.set(-1500, 300, 500);
+            scene.add(moon);
+        }
+
+        // Create starfield
+        function createStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({ 
+                color: 0xffffff,
+                size: 2,
+                sizeAttenuation: false
+            });
+
+            const starVertices = [];
+            for (let i = 0; i < 10000; i++) {
+                const x = (Math.random() - 0.5) * 10000;
+                const y = (Math.random() - 0.5) * 10000;
+                const z = (Math.random() - 0.5) * 10000;
+                starVertices.push(x, y, z);
+            }
+
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starField = new THREE.Points(starGeometry, starMaterial);
+            scene.add(starField);
+        }
+
+        // Create player representation
+        function createPlayer() {
+            const playerGeometry = new THREE.CapsuleGeometry(1, 2, 4, 8);
+            const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
+            player = new THREE.Mesh(playerGeometry, playerMaterial);
+            player.castShadow = true;
+            scene.add(player);
+        }
+
+        // Create lighting
+        function createLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+            scene.add(ambientLight);
+
+            // Sun light
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+            sunLight.position.copy(sun.position);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 5000;
+            sunLight.shadow.camera.left = -1000;
+            sunLight.shadow.camera.right = 1000;
+            sunLight.shadow.camera.top = 1000;
+            sunLight.shadow.camera.bottom = -1000;
+            scene.add(sunLight);
+        }
+
+        // Create atmosphere effect
+        function createAtmosphere() {
+            const atmosphereGeometry = new THREE.SphereGeometry(gameState.planet.radius + 20, 32, 32);
+            const atmosphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x87ceeb,
+                transparent: true,
+                opacity: 0.1,
+                side: THREE.BackSide
+            });
+            atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+            scene.add(atmosphereMesh);
+        }
+
+        // Physics and movement
+        function updatePhysics() {
+            const playerPos = gameState.player.position;
+            const planetCenter = new THREE.Vector3(0, 0, 0);
+
+            // Calculate distance to planet center
+            const distanceToCenter = playerPos.distanceTo(planetCenter);
+            const surfaceDistance = distanceToCenter - gameState.planet.radius;
+
+            // Apply gravity
+            if (distanceToCenter > 0) {
+                const gravityDirection = planetCenter.clone().sub(playerPos).normalize();
+                const gravityForce = (gameState.gravity * gameState.planet.mass) / (distanceToCenter * distanceToCenter);
+                const gravityVector = gravityDirection.multiplyScalar(gravityForce * 0.001);
+
+                gameState.player.velocity.add(gravityVector);
+            }
+
+            // Check ground collision
+            if (surfaceDistance <= 2) {
+                gameState.player.onGround = true;
+                // Keep player on surface
+                const surfacePosition = planetCenter.clone().add(
+                    playerPos.clone().sub(planetCenter).normalize().multiplyScalar(gameState.planet.radius + 2)
+                );
+                gameState.player.position.copy(surfacePosition);
+
+                // Remove downward velocity when on ground
+                const surfaceNormal = playerPos.clone().sub(planetCenter).normalize();
+                const velocityDotNormal = gameState.player.velocity.dot(surfaceNormal);
+                if (velocityDotNormal < 0) {
+                    gameState.player.velocity.sub(surfaceNormal.multiplyScalar(velocityDotNormal));
+                }
+
+                // Apply friction
+                gameState.player.velocity.multiplyScalar(0.9);
+            } else {
+                gameState.player.onGround = false;
+            }
+
+            // Update position
+            gameState.player.position.add(gameState.player.velocity);
+
+            // Update player mesh position
+            player.position.copy(gameState.player.position);
+
+            // Orient player to planet surface
+            const upVector = gameState.player.position.clone().normalize();
+            player.lookAt(gameState.player.position.clone().add(upVector));
+        }
+
+        // Handle player input
+        function handleInput() {
+            const moveSpeed = gameState.keys['Shift'] ? gameState.player.maxSpeed * 1.5 : gameState.player.maxSpeed;
+            const playerPos = gameState.player.position;
+            const planetCenter = new THREE.Vector3(0, 0, 0);
+
+            // Calculate local coordinate system (relative to planet surface)
+            const upVector = playerPos.clone().sub(planetCenter).normalize();
+            const forwardVector = new THREE.Vector3(0, 0, -1);
+            const rightVector = new THREE.Vector3(1, 0, 0);
+
+            // Transform vectors to world space relative to camera
+            forwardVector.applyQuaternion(camera.quaternion);
+            rightVector.applyQuaternion(camera.quaternion);
+
+            // Project vectors onto planet surface (remove up component)
+            forwardVector.sub(upVector.clone().multiplyScalar(forwardVector.dot(upVector))).normalize();
+            rightVector.sub(upVector.clone().multiplyScalar(rightVector.dot(upVector))).normalize();
+
+            const moveVector = new THREE.Vector3(0, 0, 0);
+
+            if (gameState.keys['w'] || gameState.keys['W']) {
+                moveVector.add(forwardVector);
+            }
+            if (gameState.keys['s'] || gameState.keys['S']) {
+                moveVector.sub(forwardVector);
+            }
+            if (gameState.keys['a'] || gameState.keys['A']) {
+                moveVector.sub(rightVector);
+            }
+            if (gameState.keys['d'] || gameState.keys['D']) {
+                moveVector.add(rightVector);
+            }
+
+            if (moveVector.length() > 0) {
+                moveVector.normalize().multiplyScalar(moveSpeed * 0.1);
+                if (gameState.player.onGround) {
+                    gameState.player.velocity.add(moveVector);
+                }
+            }
+
+            // Jump
+            if (gameState.keys[' '] && gameState.player.onGround) {
+                const jumpVector = upVector.multiplyScalar(gameState.player.jumpPower);
+                gameState.player.velocity.add(jumpVector);
+                gameState.player.onGround = false;
+            }
+
+            // Calculate speed for UI
+            gameState.player.speed = gameState.player.velocity.length();
+        }
+
+        // Update camera to follow player
+        function updateCamera() {
+            const playerPos = gameState.player.position;
+            const planetCenter = new THREE.Vector3(0, 0, 0);
+            const upVector = playerPos.clone().sub(planetCenter).normalize();
+
+            // Position camera slightly above and behind player
+            const cameraOffset = upVector.clone().multiplyScalar(3);
+            camera.position.copy(playerPos.clone().add(cameraOffset));
+
+            // Apply mouse look
+            camera.rotation.x = gameState.camera.pitch;
+            camera.rotation.y = gameState.camera.yaw;
+            camera.rotation.z = 0;
+        }
+
+        // Update celestial bodies
+        function updateCelestialBodies() {
+            gameState.time += 0.01;
+
+            // Rotate planet
+            planetMesh.rotation.y += gameState.planet.rotationSpeed;
+
+            // Orbit sun
+            const sunOrbitRadius = 2500;
+            sun.position.x = Math.cos(gameState.time * 0.1) * sunOrbitRadius;
+            sun.position.z = Math.sin(gameState.time * 0.1) * sunOrbitRadius;
+
+            // Orbit moon
+            const moonOrbitRadius = 1200;
+            moon.position.x = Math.cos(gameState.time * 0.3) * moonOrbitRadius;
+            moon.position.z = Math.sin(gameState.time * 0.3) * moonOrbitRadius;
+
+            // Update day/night
+            const sunDirection = sun.position.clone().normalize();
+            const playerDirection = gameState.player.position.clone().normalize();
+            const dotProduct = sunDirection.dot(playerDirection);
+            gameState.isDay = dotProduct > 0;
+        }
+
+        // Update weather
+        function updateWeather() {
+            // Dynamic weather based on time and position
+            if (Math.random() < 0.001) {
+                const weatherTypes = ['clear', 'cloudy', 'rain', 'storm'];
+                gameState.weather.type = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+            }
+
+            // Update atmospheric parameters
+            gameState.weather.temperature = 15 + Math.sin(gameState.time * 0.1) * 10;
+            gameState.weather.windSpeed = 3 + Math.sin(gameState.time * 0.05) * 7;
+            gameState.weather.humidity = 40 + Math.sin(gameState.time * 0.03) * 30;
+            gameState.weather.pressure = 1000 + Math.sin(gameState.time * 0.02) * 20;
+        }
+
+        // Update UI
+        function updateUI() {
+            const playerPos = gameState.player.position;
+            const distanceToCenter = playerPos.distanceTo(new THREE.Vector3(0, 0, 0));
+            const altitude = Math.max(0, distanceToCenter - gameState.planet.radius);
+
+            document.getElementById('playerPos').textContent =
+                `X: ${playerPos.x.toFixed(1)}, Y: ${playerPos.y.toFixed(1)}, Z: ${playerPos.z.toFixed(1)}`;
+            document.getElementById('altitude').textContent = `${altitude.toFixed(1)}m`;
+            document.getElementById('speed').textContent = `${gameState.player.speed.toFixed(1)} m/s`;
+            document.getElementById('gravity').textContent = `${gameState.gravity.toFixed(1)} m/s²`;
+            document.getElementById('health').textContent = `${gameState.player.health}%`;
+            document.getElementById('oxygen').textContent = `${gameState.player.oxygen}%`;
+            document.getElementById('temperature').textContent = `${gameState.weather.temperature.toFixed(1)}°C`;
+
+            document.getElementById('weather').textContent =
+                gameState.weather.type.charAt(0).toUpperCase() + gameState.weather.type.slice(1);
+            document.getElementById('wind').textContent = `${gameState.weather.windSpeed.toFixed(1)} km/h`;
+            document.getElementById('humidity').textContent = `${gameState.weather.humidity.toFixed(0)}%`;
+            document.getElementById('pressure').textContent = `${gameState.weather.pressure.toFixed(0)} hPa`;
+            document.getElementById('timeOfDay').textContent = gameState.isDay ? 'Day' : 'Night';
+            document.getElementById('visibility').textContent = `${gameState.weather.visibility}km`;
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Keyboard events
+            document.addEventListener('keydown', (event) => {
+                gameState.keys[event.key] = true;
+
+                // Special keys
+                if (event.key === 'r' || event.key === 'R') {
+                    gameState.weather.type = gameState.weather.type === 'rain' ? 'clear' : 'rain';
+                }
+                if (event.key === 't' || event.key === 'T') {
+                    gameState.isDay = !gameState.isDay;
+                }
+                if (event.key === 'f' || event.key === 'F') {
+                    gameState.flashlight = !gameState.flashlight;
+                }
+                if (event.key === 'Escape') {
+                    if (gameState.isPointerLocked) {
+                        document.exitPointerLock();
+                    }
+                }
+            });
+
+            document.addEventListener('keyup', (event) => {
+                gameState.keys[event.key] = false;
+            });
+
+            // Mouse events for look controls
+            document.addEventListener('click', () => {
+                if (!gameState.isPointerLocked) {
+                    document.body.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                gameState.isPointerLocked = document.pointerLockElement === document.body;
+            });
+
+            document.addEventListener('mousemove', (event) => {
+                if (gameState.isPointerLocked) {
+                    gameState.camera.yaw -= event.movementX * gameState.camera.sensitivity;
+                    gameState.camera.pitch -= event.movementY * gameState.camera.sensitivity;
+
+                    // Clamp pitch
+                    gameState.camera.pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, gameState.camera.pitch));
+                }
+            });
+
+            // Window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // Main game loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            handleInput();
+            updatePhysics();
+            updateCamera();
+            updateCelestialBodies();
+            updateWeather();
+            updateUI();
+
+            renderer.render(scene, camera);
+        }
+
+        // Start the game
+        window.addEventListener('load', () => {
+            init();
+            animate();
+        });
+    </script>
+</body>
+</html>
