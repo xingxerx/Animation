@@ -310,6 +310,8 @@
             const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xff6b6b });
             player = new THREE.Mesh(playerGeometry, playerMaterial);
             player.castShadow = true;
+            // For first-person view, the player model itself is usually not rendered
+            player.visible = false;
             scene.add(player);
         }
 
@@ -452,18 +454,15 @@
 
         // Update camera to follow player
         function updateCamera() {
-            const playerPos = gameState.player.position;
-            const planetCenter = new THREE.Vector3(0, 0, 0);
-            const upVector = playerPos.clone().sub(planetCenter).normalize();
-
-            // Position camera slightly above and behind player
-            const cameraOffset = upVector.clone().multiplyScalar(3);
-            camera.position.copy(playerPos.clone().add(cameraOffset));
+            // For first-person, position the camera at the player's location
+            camera.position.copy(gameState.player.position);
 
             // Apply mouse look
-            camera.rotation.x = gameState.camera.pitch;
-            camera.rotation.y = gameState.camera.yaw;
-            camera.rotation.z = 0;
+            // Use YXZ rotation order for intuitive FPS controls (yaw first, then pitch)
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = gameState.camera.yaw;   // Yaw (left/right)
+            camera.rotation.x = gameState.camera.pitch; // Pitch (up/down)
+            camera.rotation.z = 0;                      // No roll
         }
 
         // Update celestial bodies
