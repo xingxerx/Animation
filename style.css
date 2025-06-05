@@ -1,0 +1,240 @@
+body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+canvas { display: block; width: 100%; height: 100%; }
+#info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    pointer-events: none; /* Allows clicks to pass through to the canvas */
+    z-index: 10;
+}
+#chat-container, #settings-container {
+    position: fixed; /* Use fixed for taskbar */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    max-height: 40vh; /* Max height for taskbar */
+    background: rgba(40, 44, 52, 0.9);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    padding: 15px 20px; /* Adjusted padding for taskbar */
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Smaller gap for taskbar */
+    z-index: 100;
+    transition: transform 0.3s ease-in-out;
+    transform: translateY(100%); /* Start hidden at the bottom */
+    border-top: 1px solid rgba(60, 65, 75, 0.5);
+    box-sizing: border-box; /* Include padding in width/height */
+}
+#chat-container.visible, #settings-container.visible {
+    transform: translateY(0); /* Slide up to visible position */
+}
+#chat-output {
+    background: rgba(60, 65, 75, 0.7);
+    border-radius: 8px;
+    padding: 10px; /* Smaller padding */
+    min-height: 80px; /* Adjusted min-height */
+    max-height: 150px; /* Adjusted max-height */
+    overflow-y: auto;
+    color: #e0e0e0;
+    font-size: 14px; /* Smaller font size */
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    scrollbar-width: thin;
+    scrollbar-color: #888 #555;
+    flex-grow: 1; /* Allow output to grow */
+}
+#chat-output::-webkit-scrollbar {
+    width: 8px;
+}
+#chat-output::-webkit-scrollbar-track {
+    background: #555;
+    border-radius: 10px;
+}
+#chat-output::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+#chat-input, .keybind-input {
+    width: 100%;
+    padding: 10px 12px; /* Smaller padding */
+    border: 1px solid #4a4a4a;
+    border-radius: 8px;
+    background: #3a3a3a;
+    color: #e0e0e0;
+    font-size: 15px; /* Smaller font size */
+    outline: none;
+    box-sizing: border-box;
+}
+#chat-input:focus, .keybind-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.3);
+}
+#loading-indicator {
+    color: #e0e0e0;
+    font-size: 13px; /* Smaller font size */
+    text-align: center;
+    display: none;
+}
+.glowing-sphere {
+    animation: pulse 2s infinite alternate;
+}
+@keyframes pulse {
+    0% { box-shadow: 0 0 5px #007bff, 0 0 10px #007bff; }
+    100% { box-shadow: 0 0 15px #007bff, 0 0 25px #007bff; }
+}
+#crosshair {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background-color: white;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 99;
+    box-shadow: 0 0 3px rgba(0,0,0,0.8);
+}
+.keybind-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0; /* Smaller padding */
+    border-bottom: 1px solid rgba(60, 65, 75, 0.5);
+}
+.keybind-item:last-child {
+    border-bottom: none;
+}
+.keybind-item label {
+    color: #e0e0e0;
+    font-size: 15px; /* Smaller font size */
+    flex-grow: 1;
+}
+.keybind-item input {
+    width: 100px; /* Smaller width */
+    text-align: center;
+    cursor: pointer;
+}
+.settings-title {
+    color: #e0e0e0;
+    font-size: 18px; /* Smaller font size */
+    font-weight: bold;
+    margin-bottom: 10px; /* Smaller margin */
+    text-align: center;
+}
+#compass {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.6);
+    border: 2px solid #00ffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 50;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    pointer-events: none; /* Allows clicks to pass through */
+    position: relative; /* Needed for absolute positioning of children */
+}
+#compass-indicator {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 20px solid #ff0000; /* Red triangle pointing North */
+    position: absolute;
+    top: 10px;
+    transform-origin: 50% 100%; /* Rotate around its base */
+}
+#compass-center {
+    width: 10px;
+    height: 10px;
+    background-color: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.compass-direction {
+    position: absolute;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 0 3px black;
+}
+#compass-n { top: 5px; left: 50%; transform: translateX(-50%); }
+#compass-s { bottom: 5px; left: 50%; transform: translateX(-50%); }
+#compass-e { right: 5px; top: 50%; transform: translateY(-50%); }
+#compass-w { left: 5px; top: 50%; transform: translateY(-50%); }
+
+/* New styles for intercardinal directions */
+#compass-ne { top: 15px; right: 15px; transform: translate(50%, -50%) rotate(45deg); }
+#compass-se { bottom: 15px; right: 15px; transform: translate(50%, 50%) rotate(135deg); }
+#compass-sw { bottom: 15px; left: 15px; transform: translate(-50%, 50%) rotate(-135deg); }
+#compass-nw { top: 15px; left: 15px; transform: translate(-50%, -50%) rotate(-45deg); }
+
+/* Styles for compass studs */
+.compass-stud-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.compass-stud {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    transform-origin: 50% 40px; /* Center of the compass */
+}
+
+/* Health Bar Styles */
+#health-bar-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 25px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border: 2px solid #00ffff;
+    border-radius: 12px;
+    overflow: hidden;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+#health-bar-fill {
+    height: 100%;
+    width: 100%; /* Initial width */
+    background-color: #00ff00; /* Green */
+    transition: width 0.2s ease-out, background-color 0.2s ease-out;
+    border-radius: 10px; /* Slightly smaller to fit inside container */
+}
+#health-text {
+    position: absolute;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    text-shadow: 0 0 5px black;
+}
