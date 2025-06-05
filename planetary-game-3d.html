@@ -454,8 +454,20 @@
 
         // Update camera to follow player
         function updateCamera() {
-            // For first-person, position the camera at the player's location
-            camera.position.copy(gameState.player.position);
+            const playerPos = gameState.player.position;
+            const planetCenter = new THREE.Vector3(0, 0, 0); // Assuming planet is at origin
+
+            // Calculate the player's local "up" vector (perpendicular to planet surface at player's position)
+            const playerUpVector = playerPos.clone().sub(planetCenter).normalize();
+
+            // Define eye height offset from the player's center.
+            // Player capsule total height is approx. 4 units (radius 1, cylinder height 2).
+            // An eyeHeightOffset of 1.5 units places the camera near the top of the capsule.
+            const eyeHeightOffset = 1.5; 
+            const cameraOffsetVector = playerUpVector.multiplyScalar(eyeHeightOffset);
+
+            // Set camera position to player's center + eye height offset
+            camera.position.copy(playerPos).add(cameraOffsetVector);
 
             // Apply mouse look
             // Use YXZ rotation order for intuitive FPS controls (yaw first, then pitch)
