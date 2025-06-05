@@ -198,10 +198,13 @@
         
         <!-- UI Panels -->
         <div class="ui-panel">
+            <div><strong>Player Status</strong></div>
             <div>Position: <span id="playerPos">X: 600, Y: 250</span></div>
             <div>Gravity: <span id="gravityForce">9.8 m/s²</span></div>
             <div>Altitude: <span id="altitude">150m</span></div>
             <div>Day/Night: <span id="timeOfDay">Day</span></div>
+            <div>Health: <span id="playerHealth">100%</span></div>
+            <div>Energy: <span id="playerEnergy">100%</span></div>
         </div>
         
         <div class="controls">
@@ -210,12 +213,18 @@
             <div>Space: Jump</div>
             <div>R: Toggle Rain</div>
             <div>T: Change Time of Day</div>
+            <div>G: Toggle Gravity Visualization</div>
+            <div>P: Pause/Resume Game</div>
         </div>
         
         <div class="weather-indicator">
+            <div><strong>Atmospheric Data</strong></div>
             <div>Weather: <span id="weatherStatus">Clear</span></div>
             <div>Wind: <span id="windSpeed">5 km/h</span></div>
             <div>Temperature: <span id="temperature">22°C</span></div>
+            <div>Humidity: <span id="humidity">60%</span></div>
+            <div>Pressure: <span id="pressure">1013 hPa</span></div>
+            <div>Cloud Cover: <span id="cloudCover">20%</span></div>
         </div>
     </div>
 
@@ -261,6 +270,11 @@
         const weatherStatusEl = document.getElementById('weatherStatus');
         const windSpeedEl = document.getElementById('windSpeed');
         const temperatureEl = document.getElementById('temperature');
+        const playerHealthEl = document.getElementById('playerHealth');
+        const playerEnergyEl = document.getElementById('playerEnergy');
+        const humidityEl = document.getElementById('humidity');
+        const pressureEl = document.getElementById('pressure');
+        const cloudCoverEl = document.getElementById('cloudCover');
 
         // Initialize stars
         function createStars() {
@@ -335,34 +349,41 @@
         function applyGravity() {
             const dist = distance(gameState.player.x, gameState.player.y, gameState.planet.x, gameState.planet.y);
             const surfaceDistance = dist - gameState.planet.radius;
-            
+
+            // Calculate gravitational force using realistic physics
+            const gravityStrength = (gameState.gravity * gameState.planet.mass) / (dist * dist);
+            const angle = Math.atan2(gameState.planet.y - gameState.player.y, gameState.planet.x - gameState.player.x);
+
             if (surfaceDistance <= 20) { // On or near surface
-                // Calculate angle to planet center
-                const angle = Math.atan2(gameState.planet.y - gameState.player.y, gameState.planet.x - gameState.player.x);
-                
                 if (surfaceDistance <= 0) { // On surface
                     gameState.player.onGround = true;
-                    // Keep player on surface
+                    // Keep player on surface with proper orientation
                     const surfaceX = gameState.planet.x - Math.cos(angle) * gameState.planet.radius;
                     const surfaceY = gameState.planet.y - Math.sin(angle) * gameState.planet.radius;
                     gameState.player.x = surfaceX;
                     gameState.player.y = surfaceY;
-                    gameState.player.vy = 0;
+                    gameState.player.angle = angle + Math.PI; // Player faces away from planet center
+
+                    // Apply surface friction
+                    gameState.player.vx *= 0.8;
+                    gameState.player.vy *= 0.8;
                 } else {
                     gameState.player.onGround = false;
-                    // Apply gravity force
-                    const gravityStrength = gameState.gravity * (gameState.planet.radius / dist) ** 2;
+                    // Apply full gravity force
                     gameState.player.vx += Math.cos(angle) * gravityStrength;
                     gameState.player.vy += Math.sin(angle) * gravityStrength;
                 }
             } else {
                 gameState.player.onGround = false;
-                // Weaker gravity at distance
-                const angle = Math.atan2(gameState.planet.y - gameState.player.y, gameState.planet.x - gameState.player.x);
-                const gravityStrength = gameState.gravity * 0.1 * (gameState.planet.radius / dist) ** 2;
+                // Apply gravity force (weaker at distance)
                 gameState.player.vx += Math.cos(angle) * gravityStrength;
                 gameState.player.vy += Math.sin(angle) * gravityStrength;
             }
+
+            // Apply atmospheric drag
+            const atmosphericDrag = gameState.atmosphere.density * 0.001;
+            gameState.player.vx *= (1 - atmosphericDrag);
+            gameState.player.vy *= (1 - atmosphericDrag);
         }
 
         // Update celestial body positions
@@ -444,56 +465,173 @@
             player.setAttribute('transform', `translate(${gameState.player.x},${gameState.player.y})`);
         }
 
-        // Update weather
+        // Update weather system
         function updateWeather() {
-            // Random weather changes
-            if (Math.random() < 0.001) {
-                const weatherTypes = ['clear', 'rain', 'storm'];
-                gameState.weather.type = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+            // Dynamic weather changes based on time and celestial positions
+            const sunInfluence = 1 - (distance(gameState.sun.x, gameState.sun.y, gameState.planet.x, gameState.planet.y) / 500);
+            const moonInfluence = 1 - (distance(gameState.moon.x, gameState.moon.y, gameState.planet.x, gameState.planet.y) / 400);
+
+            // Update weather parameters
+            gameState.weather.temperature = 18 + sunInfluence * 15 + Math.sin(gameState.time * 0.1) * 5;
+            gameState.weather.windSpeed = 3 + Math.sin(gameState.time * 0.05) * 7 + moonInfluence * 3;
+            gameState.weather.humidity = 40 + Math.sin(gameState.time * 0.03) * 30;
+            gameState.weather.pressure = 1000 + Math.sin(gameState.time * 0.02) * 20;
+
+            // Weather transitions
+            if (Math.random() < 0.002) {
+                const weatherTypes = ['clear', 'cloudy', 'rain', 'storm'];
+                const weights = [0.4, 0.3, 0.2, 0.1]; // Probability weights
+                let random = Math.random();
+                let selectedWeather = 'clear';
+
+                for (let i = 0; i < weatherTypes.length; i++) {
+                    random -= weights[i];
+                    if (random <= 0) {
+                        selectedWeather = weatherTypes[i];
+                        break;
+                    }
+                }
+                gameState.weather.type = selectedWeather;
             }
-            
+
             // Apply weather effects
-            if (gameState.weather.type === 'rain') {
-                rain.style.display = 'block';
-                rain.setAttribute('opacity', '0.7');
-            } else {
-                rain.style.display = 'none';
+            const clouds = document.getElementById('clouds');
+            switch (gameState.weather.type) {
+                case 'clear':
+                    rain.style.display = 'none';
+                    clouds.setAttribute('opacity', '0.3');
+                    gameState.weather.cloudCover = 0.2;
+                    break;
+                case 'cloudy':
+                    rain.style.display = 'none';
+                    clouds.setAttribute('opacity', '0.8');
+                    gameState.weather.cloudCover = 0.7;
+                    break;
+                case 'rain':
+                    rain.style.display = 'block';
+                    rain.setAttribute('opacity', '0.6');
+                    clouds.setAttribute('opacity', '0.9');
+                    gameState.weather.cloudCover = 0.9;
+                    gameState.weather.precipitation = 0.5;
+                    break;
+                case 'storm':
+                    rain.style.display = 'block';
+                    rain.setAttribute('opacity', '0.9');
+                    clouds.setAttribute('opacity', '1.0');
+                    gameState.weather.cloudCover = 1.0;
+                    gameState.weather.precipitation = 1.0;
+                    gameState.weather.windSpeed *= 2;
+                    break;
             }
+
+            // Update particles
+            updateParticles();
         }
 
-        // Update UI
+        // Update UI with real-time data
         function updateUI() {
             const dist = distance(gameState.player.x, gameState.player.y, gameState.planet.x, gameState.planet.y);
             const altitude = Math.max(0, dist - gameState.planet.radius);
-            
+            const currentGravity = (gameState.gravity * gameState.planet.mass) / (dist * dist);
+
+            // Update position and physics info
             playerPosEl.textContent = `X: ${Math.round(gameState.player.x)}, Y: ${Math.round(gameState.player.y)}`;
-            gravityForceEl.textContent = `${(gameState.gravity * (gameState.planet.radius / dist) ** 2).toFixed(1)} m/s²`;
+            gravityForceEl.textContent = `${currentGravity.toFixed(2)} m/s²`;
             altitudeEl.textContent = `${Math.round(altitude)}m`;
-            timeOfDayEl.textContent = gameState.isDay ? 'Day' : 'Night';
+
+            // Update time of day with transition periods
+            let timeStatus = 'Day';
+            if (!gameState.isDay) {
+                timeStatus = 'Night';
+            } else if (gameState.sun.y > gameState.planet.y - 50) {
+                timeStatus = 'Sunset';
+            } else if (gameState.sun.y < gameState.planet.y - 200) {
+                timeStatus = 'Dawn';
+            }
+            timeOfDayEl.textContent = timeStatus;
+
+            // Update weather information
             weatherStatusEl.textContent = gameState.weather.type.charAt(0).toUpperCase() + gameState.weather.type.slice(1);
-            windSpeedEl.textContent = `${Math.round(Math.random() * 10 + 5)} km/h`;
-            temperatureEl.textContent = `${Math.round(Math.random() * 10 + 18)}°C`;
+            windSpeedEl.textContent = `${Math.round(gameState.weather.windSpeed)} km/h`;
+            temperatureEl.textContent = `${Math.round(gameState.weather.temperature)}°C`;
+            humidityEl.textContent = `${Math.round(gameState.weather.humidity)}%`;
+            pressureEl.textContent = `${Math.round(gameState.weather.pressure)} hPa`;
+            cloudCoverEl.textContent = `${Math.round(gameState.weather.cloudCover * 100)}%`;
+
+            // Update player status
+            playerHealthEl.textContent = `${Math.round(gameState.player.health)}%`;
+            playerEnergyEl.textContent = `${Math.round(gameState.player.energy)}%`;
+
+            // Update background color based on time of day
+            const canvas = document.getElementById('gameCanvas');
+            if (gameState.isDay) {
+                canvas.style.background = 'radial-gradient(circle at center, #001122 0%, #000033 100%)';
+            } else {
+                canvas.style.background = 'radial-gradient(circle at center, #000011 0%, #000000 100%)';
+            }
         }
 
         // Game loop
         function gameLoop() {
-            updateCelestialBodies();
-            updatePlayer();
-            updateWeather();
-            updateUI();
+            if (gameState.gameSpeed > 0) { // Only update if not paused
+                updateCelestialBodies();
+                updatePlayer();
+                updateWeather();
+                updateUI();
+            }
             requestAnimationFrame(gameLoop);
+        }
+
+        // Toggle gravity field visualization
+        function toggleGravityVisualization() {
+            const gravityField = document.getElementById('gravityField');
+            const currentOpacity = gravityField.getAttribute('opacity');
+
+            if (currentOpacity === '0.1') {
+                gravityField.setAttribute('opacity', '0');
+                // Clear existing gravity lines
+                gravityField.innerHTML = '';
+            } else {
+                gravityField.setAttribute('opacity', '0.1');
+                // Create gravity field lines
+                for (let i = 0; i < 20; i++) {
+                    for (let j = 0; j < 15; j++) {
+                        const x = i * 60;
+                        const y = j * 53;
+                        const dist = distance(x, y, gameState.planet.x, gameState.planet.y);
+                        const angle = Math.atan2(gameState.planet.y - y, gameState.planet.x - x);
+                        const strength = Math.min(30, (gameState.planet.radius * 2) / dist);
+
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', x);
+                        line.setAttribute('y1', y);
+                        line.setAttribute('x2', x + Math.cos(angle) * strength);
+                        line.setAttribute('y2', y + Math.sin(angle) * strength);
+                        line.setAttribute('stroke', '#ffffff');
+                        line.setAttribute('stroke-width', '1');
+                        line.setAttribute('opacity', '0.3');
+                        gravityField.appendChild(line);
+                    }
+                }
+            }
         }
 
         // Event listeners
         document.addEventListener('keydown', (e) => {
             gameState.keys[e.key] = true;
-            
+
             // Special keys
             if (e.key === 'r' || e.key === 'R') {
                 gameState.weather.type = gameState.weather.type === 'rain' ? 'clear' : 'rain';
             }
             if (e.key === 't' || e.key === 'T') {
                 gameState.isDay = !gameState.isDay;
+            }
+            if (e.key === 'g' || e.key === 'G') {
+                toggleGravityVisualization();
+            }
+            if (e.key === 'p' || e.key === 'P') {
+                gameState.gameSpeed = gameState.gameSpeed > 0 ? 0 : 1;
             }
         });
 
