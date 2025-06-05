@@ -265,15 +265,65 @@
         // Initialize stars
         function createStars() {
             const starsGroup = document.getElementById('stars');
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 150; i++) {
                 const star = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 star.setAttribute('cx', Math.random() * 1200);
                 star.setAttribute('cy', Math.random() * 800);
                 star.setAttribute('r', Math.random() * 1.5 + 0.5);
                 star.setAttribute('fill', 'white');
                 star.setAttribute('opacity', Math.random() * 0.8 + 0.2);
+
+                // Add twinkling animation to some stars
+                if (Math.random() < 0.3) {
+                    const animate = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+                    animate.setAttribute('attributeName', 'opacity');
+                    animate.setAttribute('values', '0.2;1;0.2');
+                    animate.setAttribute('dur', (Math.random() * 3 + 2) + 's');
+                    animate.setAttribute('repeatCount', 'indefinite');
+                    star.appendChild(animate);
+                }
+
                 starsGroup.appendChild(star);
             }
+        }
+
+        // Create particle system for atmospheric effects
+        function createParticle(x, y, type) {
+            return {
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                life: 1.0,
+                maxLife: Math.random() * 100 + 50,
+                type: type,
+                size: Math.random() * 3 + 1,
+                color: type === 'dust' ? '#d4a574' : '#87ceeb'
+            };
+        }
+
+        // Update particle system
+        function updateParticles() {
+            // Add new particles based on weather
+            if (gameState.weather.type === 'storm' && Math.random() < 0.1) {
+                gameState.particles.push(createParticle(
+                    Math.random() * 1200,
+                    Math.random() * 800,
+                    'dust'
+                ));
+            }
+
+            // Update existing particles
+            gameState.particles = gameState.particles.filter(particle => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life -= 1;
+
+                // Apply wind effect
+                particle.vx += gameState.weather.windSpeed * 0.01;
+
+                return particle.life > 0;
+            });
         }
 
         // Calculate distance between two points
